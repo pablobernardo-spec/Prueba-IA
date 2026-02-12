@@ -1083,7 +1083,10 @@
         const MealModal = ({ setShowMealModal, meals, setMeals, saveData, syncToSheets, customFoods, calculateFoodMacrosV4 }) => {
             const [formData, setFormData] = React.useState({
                 food: '',
+                unitMode: false, // false = gramos, true = cantidad
                 grams: '',
+                quantity: '',
+                unitWeight: '', // gramos por unidad
                 autoCalc: true,
                 kcal: '',
                 protein: '',
@@ -1131,47 +1134,134 @@
                                     {Object.keys(customFoods || {}).map(f => <option key={f} value={f} />)}
                                 </datalist>
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="text-xs text-slate-500 font-bold block mb-1 uppercase">Gramos</label>
-                                    <input
-                                        type="number"
-                                        value={formData.grams}
-                                        onChange={e => {
-                                            const g = parseFloat(e.target.value) || 0;
-                                            if (formData.autoCalc) {
-                                                const macros = calculateFoodMacrosV4(formData.food, g);
-                                                if (macros) {
-                                                    setFormData({
-                                                        ...formData,
-                                                        grams: e.target.value,
-                                                        kcal: macros.kcal,
-                                                        protein: macros.protein,
-                                                        carbs: macros.carbs,
-                                                        fat: macros.fat
-                                                    });
+                            {/* Toggle: Gramos vs Cantidad */}
+                            <div className="flex gap-2 bg-slate-950/50 p-1 rounded-xl border border-slate-800">
+                                <button
+                                    onClick={() => setFormData({ ...formData, unitMode: false })}
+                                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-black uppercase transition-all ${!formData.unitMode ? 'bg-purple-600 text-white' : 'text-slate-500'}`}
+                                >
+                                    Gramos
+                                </button>
+                                <button
+                                    onClick={() => setFormData({ ...formData, unitMode: true })}
+                                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-black uppercase transition-all ${formData.unitMode ? 'bg-purple-600 text-white' : 'text-slate-500'}`}
+                                >
+                                    Cantidad
+                                </button>
+                            </div>
+
+                            {/* Inputs según modo */}
+                            {!formData.unitMode ? (
+                                // Modo Gramos
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-xs text-slate-500 font-bold block mb-1 uppercase">Gramos</label>
+                                        <input
+                                            type="number"
+                                            value={formData.grams}
+                                            onChange={e => {
+                                                const g = parseFloat(e.target.value) || 0;
+                                                if (formData.autoCalc) {
+                                                    const macros = calculateFoodMacrosV4(formData.food, g);
+                                                    if (macros) {
+                                                        setFormData({
+                                                            ...formData,
+                                                            grams: e.target.value,
+                                                            kcal: macros.kcal,
+                                                            protein: macros.protein,
+                                                            carbs: macros.carbs,
+                                                            fat: macros.fat
+                                                        });
+                                                    } else {
+                                                        setFormData({ ...formData, grams: e.target.value });
+                                                    }
                                                 } else {
                                                     setFormData({ ...formData, grams: e.target.value });
                                                 }
-                                            } else {
-                                                setFormData({ ...formData, grams: e.target.value });
-                                            }
-                                        }}
-                                        className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-white outline-none focus:border-purple-500"
-                                    />
-                                </div>
-                                <div className="flex items-end pb-2">
-                                    <label className="flex items-center gap-2 cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={formData.autoCalc}
-                                            onChange={e => setFormData({ ...formData, autoCalc: e.target.checked })}
-                                            className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-purple-600"
+                                            }}
+                                            className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-white outline-none focus:border-purple-500"
                                         />
-                                        <span className="text-[10px] font-bold text-slate-500 uppercase">Auto</span>
-                                    </label>
+                                    </div>
+                                    <div className="flex items-end pb-2">
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={formData.autoCalc}
+                                                onChange={e => setFormData({ ...formData, autoCalc: e.target.checked })}
+                                                className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-purple-600"
+                                            />
+                                            <span className="text-[10px] font-bold text-slate-500 uppercase">Auto</span>
+                                        </label>
+                                    </div>
                                 </div>
-                            </div>
+                            ) : (
+                                // Modo Cantidad
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-xs text-slate-500 font-bold block mb-1 uppercase">Cantidad</label>
+                                        <input
+                                            type="number"
+                                            step="0.5"
+                                            value={formData.quantity}
+                                            onChange={e => {
+                                                const qty = parseFloat(e.target.value) || 0;
+                                                const unitW = parseFloat(formData.unitWeight) || 0;
+                                                const totalGrams = qty * unitW;
+                                                if (formData.autoCalc) {
+                                                    const macros = calculateFoodMacrosV4(formData.food, totalGrams);
+                                                    if (macros) {
+                                                        setFormData({
+                                                            ...formData,
+                                                            quantity: e.target.value,
+                                                            grams: totalGrams.toString(),
+                                                            kcal: macros.kcal,
+                                                            protein: macros.protein,
+                                                            carbs: macros.carbs,
+                                                            fat: macros.fat
+                                                        });
+                                                    } else {
+                                                        setFormData({ ...formData, quantity: e.target.value, grams: totalGrams.toString() });
+                                                    }
+                                                } else {
+                                                    setFormData({ ...formData, quantity: e.target.value, grams: totalGrams.toString() });
+                                                }
+                                            }}
+                                            className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-white outline-none focus:border-purple-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-slate-500 font-bold block mb-1 uppercase">g/unidad</label>
+                                        <input
+                                            type="number"
+                                            value={formData.unitWeight}
+                                            onChange={e => {
+                                                const unitW = parseFloat(e.target.value) || 0;
+                                                const qty = parseFloat(formData.quantity) || 0;
+                                                const totalGrams = qty * unitW;
+                                                if (formData.autoCalc) {
+                                                    const macros = calculateFoodMacrosV4(formData.food, totalGrams);
+                                                    if (macros) {
+                                                        setFormData({
+                                                            ...formData,
+                                                            unitWeight: e.target.value,
+                                                            grams: totalGrams.toString(),
+                                                            kcal: macros.kcal,
+                                                            protein: macros.protein,
+                                                            carbs: macros.carbs,
+                                                            fat: macros.fat
+                                                        });
+                                                    } else {
+                                                        setFormData({ ...formData, unitWeight: e.target.value, grams: totalGrams.toString() });
+                                                    }
+                                                } else {
+                                                    setFormData({ ...formData, unitWeight: e.target.value, grams: totalGrams.toString() });
+                                                }
+                                            }}
+                                            className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-white outline-none focus:border-purple-500"
+                                        />
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
@@ -1310,6 +1400,7 @@
             const today = new Date().toDateString();
             const [formData, setFormData] = React.useState(wellness[today] || {
                 sleep: 3, // 1-5
+                sleepHours: 7, // Horas dormidas
                 energy: 3,
                 stress: 3,
                 soreness: 3
@@ -1327,6 +1418,21 @@
                     <div className="bg-slate-900 rounded-3xl p-6 max-w-sm w-full border border-slate-800 modal-overlay" onClick={e => e.stopPropagation()}>
                         <h3 className="text-xl font-black uppercase italic mb-4 text-emerald-400">🧠 Bienestar Hoy</h3>
                         <div className="space-y-6">
+                            {/* Horas de Sueño */}
+                            <div className="bg-slate-950/50 p-4 rounded-2xl border border-indigo-900/30">
+                                <label className="text-xs text-indigo-400 font-black block mb-2 uppercase flex items-center gap-2">
+                                    <i className="fas fa-bed"></i> Horas de Sueño
+                                </label>
+                                <input
+                                    type="number"
+                                    step="0.5"
+                                    min="0"
+                                    max="12"
+                                    value={formData.sleepHours}
+                                    onChange={e => setFormData({ ...formData, sleepHours: parseFloat(e.target.value) || 0 })}
+                                    className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-white text-center text-2xl font-black outline-none focus:border-indigo-500"
+                                />
+                            </div>
                             {metrics.map(m => (
                                 <div key={m.id}>
                                     <div className="flex justify-between items-center mb-2">
@@ -1676,11 +1782,14 @@
         // COMPONENTE AI CHAT
         // ==========================================
         const AIChat = ({ onClose, contextData, userProfile }) => {
-            const [messages, setMessages] = useState([
-                { role: 'ai', text: `¡Hola ${userProfile.username}! Soy tu Coach IA. Veo que hoy consumiste ${contextData.nutrition.kcal} kcal. ¿En qué te puedo ayudar?` }
-            ]);
+            // Cargar historial desde localStorage
+            const [messages, setMessages] = useState(() => {
+                const saved = localStorage.getItem('ai_chat_history');
+                return saved ? JSON.parse(saved) : [];
+            });
             const [input, setInput] = useState('');
             const [isThinking, setIsThinking] = useState(false);
+            const [briefingDone, setBriefingDone] = useState(false);
             const messagesEndRef = useRef(null);
 
             const scrollToBottom = () => {
@@ -1688,6 +1797,103 @@
             };
 
             useEffect(scrollToBottom, [messages]);
+
+            // Guardar historial en localStorage cada vez que cambia
+            useEffect(() => {
+                localStorage.setItem('ai_chat_history', JSON.stringify(messages));
+            }, [messages]);
+
+            // Daily Briefing Automático (solo una vez al abrir)
+            useEffect(() => {
+                if (!briefingDone && messages.length === 0) {
+                    setBriefingDone(true);
+                    generateDailyBriefing();
+                }
+            }, []);
+
+            const generateDailyBriefing = async () => {
+                setIsThinking(true);
+                const apiKey = localStorage.getItem('ai_api_key');
+                if (!apiKey) {
+                    setMessages([{ role: 'ai', text: "⚠️ Necesito un cerebro. Configura tu API Key de **Groq** (es gratis y muy potente) en el engranaje ⚙️." }]);
+                    setIsThinking(false);
+                    return;
+                }
+
+                try {
+                    const briefingPrompt = `
+ERES UN COACH EXPERTO EN FITNESS, NUTRICIÓN Y PROGRAMACIÓN DE RUTINAS.
+TU MISIÓN CRÍTICA: PREVENIR LESIONES Y SOBREENTRENAMIENTO.
+
+ANALIZA ESTOS DATOS DEL USUARIO Y GENERA UN BRIEFING PROACTIVO:
+${JSON.stringify(contextData, null, 2)}
+
+INSTRUCCIONES DE ANÁLISIS:
+
+1. **PREVENCIÓN DE SOBREENTRENAMIENTO** (PRIORIDAD MÁXIMA):
+   - Calcula la CARGA TOTAL SEMANAL: gym + running + fútbol
+   - Si hizo >5 días de actividad intensa seguidos → ALERTA ROJA: "Descansá hoy, riesgo de lesión"
+   - Si durmió <6h + entreno intenso ayer → "Bajá intensidad 30% hoy"
+   - Si proteína <1.6g/kg + alto volumen → "Riesgo de catabolismo, aumentá proteína"
+
+2. **TRACKING DE RUNNING ESPECÍFICO**:
+   - Si corrió >10% más km que la semana pasada → "Progresión muy rápida, riesgo de lesión"
+   - Si el ritmo fue >15 seg/km más rápido que su promedio → "Cuidado, ritmo muy agresivo"
+   - Si corrió >20km + hizo gym el mismo día → "Sobrecarga, descansá mañana"
+   - Si tiene plan de maratón/carrera → Verificar adherencia y ajustar
+
+3. **SEÑALES DE FATIGA ACUMULADA**:
+   - Sueño <7h por 3+ días → "Semana de descarga necesaria"
+   - Calorías <80% de meta por 2+ días + alto volumen → "Déficit peligroso"
+   - Bienestar (stress/soreness) >4/5 → "Día de recuperación activa"
+
+4. **RECOMENDACIONES PROACTIVAS**:
+   - Si durmió poco → Sugiere ejercicios de baja intensidad específicos
+   - Si faltan proteínas → Alimentos concretos con cantidades
+   - Si tiene entreno hoy → Consejo técnico + hidratación pre-entreno
+   - Si todo está bien → Tip del día + motivación
+
+5. **FORMATO DE RESPUESTA**:
+   - Máximo 3 líneas
+   - Directo, sin rodeos
+   - Español rioplatense (Argentina), tutéalo
+   - NO preguntes nada, solo da feedback y órdenes claras
+   - Usa emojis: 🚨 (alerta), ⚠️ (precaución), ✅ (todo bien), 💪 (motivación)
+
+EJEMPLO BUENO:
+"🚨 Che! Dormiste 5h y ayer corriste 15km + gym. HOY DESCANSÁ, no es negociable. 
+Riesgo alto de lesión. Mañana volvés con todo."
+
+EJEMPLO MALO:
+"Hola! ¿Cómo estás? Vi que dormiste poco. ¿Querés que ajustemos el plan?"
+`;
+
+                    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${apiKey}`
+                        },
+                        body: JSON.stringify({
+                            model: "llama-3.3-70b-versatile",
+                            messages: [{ role: "user", content: briefingPrompt }],
+                            temperature: 0.8
+                        })
+                    });
+
+                    const data = await response.json();
+                    if (data.error) throw new Error(data.error.message);
+
+                    const briefing = data.choices[0].message.content;
+                    setMessages([{ role: 'ai', text: `👋 **¡Hola ${userProfile.username}!**\n\n${briefing}` }]);
+
+                } catch (error) {
+                    console.error("Error Briefing:", error);
+                    setMessages([{ role: 'ai', text: `¡Hola ${userProfile.username}! Soy tu Coach IA. ¿En qué te puedo ayudar hoy?` }]);
+                } finally {
+                    setIsThinking(false);
+                }
+            };
 
             const handleSend = async () => {
                 if (!input.trim()) return;
@@ -1705,22 +1911,78 @@
 
                 try {
                     const systemPrompt = `
-ERES UN ENTRENADOR PERSONAL EXPERTO Y MOTIVADOR LLAMADO "COACH IA".
-TU OBJETIVO: Ayudar a ${userProfile.username} a alcanzar sus metas físicas (${contextData.goals.weightGoal}kg, bajar grasa).
+ERES UN COACH EXPERTO EN:
+🍏 Nutrición Deportiva (macros, timing, suplementación)
+💪 Hipertrofia y Fuerza (powerbuilding, periodización)
+📅 Programación de Rutinas (volumen, frecuencia, recuperación)
+🏃 Entrenamiento de Resistencia (running, maratón, ultras)
 
-CONTEXTO ACTUAL DEL USUARIO:
+TU MISIÓN CRÍTICA: MAXIMIZAR RESULTADOS SIN LESIONES.
+
+USUARIO: ${userProfile.username}
+METAS: ${JSON.stringify(contextData.goals)}
+
+DATOS ACTUALES:
 ${JSON.stringify(contextData, null, 2)}
 
-INSTRUCCIONES:
-1. Analiza los datos de nutrición y entreno de hoy.
-2. Si preguntan "¿qué como?", sugiere algo específico basado en los macros faltantes.
-3. Si preguntan sobre el entreno, revisa el volumen de hoy.
-4. Sé breve, directo y usa emojis.
-5. NO inventes datos que no están en el contexto.
-6. Habla en español rioplatense (Argentina) pero profesional.
+INSTRUCCIONES OBLIGATORIAS:
+
+1. **ANALIZA EL HISTORIAL DE CHAT** para recordar:
+   - Lesiones previas o actuales
+   - Preferencias alimentarias (vegano, alergias, etc.)
+   - Planes de entrenamiento activos (ej: "plan para maratón")
+   - Contexto de conversaciones anteriores
+
+2. **PREVENCIÓN DE SOBREENTRENAMIENTO**:
+   - Calcula carga semanal total: gym + running + fútbol + otros
+   - Si detectás >5 días consecutivos de alta intensidad → ORDENÁ descanso
+   - Si sueño <6h + entreno intenso → Reducí volumen/intensidad 30-50%
+   - Si proteína <1.6g/kg + alto volumen → Alerta de catabolismo
+   - Si calorías muy bajas + alto volumen → Riesgo de lesión y pérdida muscular
+
+3. **TRACKING DE RUNNING AVANZADO**:
+   - Monitorea progresión de km semanales (no >10% por semana)
+   - Analiza ritmo (pace): si es muy rápido vs promedio → advertir
+   - Si corrió >20km + gym mismo día → sobrecarga, recomendar descanso
+   - Si tiene plan de carrera (10k, 21k, 42k) → verificar adherencia y ajustar
+   - Sugiere recuperación específica: días fáciles, cross-training, descanso activo
+
+4. **SEÑALES DE FATIGA**:
+   - Sueño insuficiente (< 7h) por varios días → semana de descarga
+   - Bienestar bajo (stress/soreness alto) → recuperación activa
+   - Déficit calórico grande + alto volumen → peligro
+
+5. **RECOMENDACIONES ESPECÍFICAS**:
+   - Comidas: Alimentos concretos con cantidades (ej: "200g pollo = 60g proteína")
+   - Entreno: Ejercicios específicos, series, reps, descansos
+   - Running: Ritmos, distancias, tipos de entreno (fácil, tempo, intervalos)
+   - Recuperación: Estiramientos, foam rolling, días off
+   - Hidratación: ml específicos pre/durante/post entreno
+
+6. **ESTILO DE COMUNICACIÓN**:
+   - Breve, directo, sin rodeos
+   - Español rioplatense (Argentina), tutéalo
+   - Usa emojis: 🚨 (alerta), ⚠️ (precaución), ✅ (ok), 💪 (motivación)
+   - Si hay riesgo de lesión, sé FIRME y CLARO
+   - NO inventes datos que no están en el contexto
+
+EJEMPLO DE RESPUESTA BUENA:
+Usuario: "¿Qué ejercicio hago hoy?"
+Tú: "⚠️ Che, dormiste 5h y ayer corriste 15km. Hoy hacé solo upper body LIVIANO:
+- Press banca 3x8 (70% de tu max)
+- Remo 3x10
+- Nada de piernas ni cardio. Descansá bien esta noche."
+
+EJEMPLO DE RESPUESTA MALA:
+"Podrías hacer lo que quieras, pero tal vez sería bueno descansar. ¿Qué te parece?"
 `;
 
-                    // Usamos Groq (Llama 3) que es compatible con formato OpenAI
+                    // Convertir historial a formato OpenAI
+                    const chatHistory = messages.map(m => ({
+                        role: m.role === 'ai' ? 'assistant' : 'user',
+                        content: m.text
+                    }));
+
                     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
                         method: 'POST',
                         headers: {
@@ -1728,9 +1990,10 @@ INSTRUCCIONES:
                             'Authorization': `Bearer ${apiKey}`
                         },
                         body: JSON.stringify({
-                            model: "llama-3.3-70b-versatile", // Modelo gratuito más nuevo y potente
+                            model: "llama-3.3-70b-versatile",
                             messages: [
                                 { role: "system", content: systemPrompt },
+                                ...chatHistory,
                                 { role: "user", content: userMsg }
                             ],
                             temperature: 0.7
@@ -1755,8 +2018,17 @@ INSTRUCCIONES:
             const toggleDebug = () => {
                 setMessages(prev => [...prev, {
                     role: 'ai',
-                    text: `🔍 **DATOS QUE LEO ACTUALMENTE:**\n\n- Calorías: ${contextData.nutrition.kcal} / ${contextData.nutrition.targets.calories}\n- Proteína: ${contextData.nutrition.protein}g\n- Pasos/Cardio: ${contextData.workout.length > 0 ? 'Sí' : 'No'}\n- Agua: ${contextData.water}ml\n\n*Esto es lo que envío a Google para analizar.*`
+                    text: `🔍 **DATOS QUE LEO ACTUALMENTE:**\n\n- Calorías: ${contextData.nutrition.kcal} / ${contextData.nutrition.targets.calories}\n- Proteína: ${contextData.nutrition.protein}g\n- Pasos/Cardio: ${contextData.workout.length > 0 ? 'Sí' : 'No'}\n- Agua: ${contextData.water}ml\n\n*Esto es lo que envío a Groq para analizar.*`
                 }]);
+            };
+
+            const clearChat = () => {
+                if (confirm('¿Borrar todo el historial de chat?')) {
+                    setMessages([]);
+                    localStorage.removeItem('ai_chat_history');
+                    setBriefingDone(false);
+                    generateDailyBriefing();
+                }
             };
 
             return (
@@ -1781,6 +2053,13 @@ INSTRUCCIONES:
                             </div>
                             <div className="flex gap-2">
                                 <button
+                                    onClick={clearChat}
+                                    className="w-8 h-8 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center hover:bg-slate-700 hover:text-white transition-colors"
+                                    title="Borrar chat"
+                                >
+                                    <i className="fas fa-trash"></i>
+                                </button>
+                                <button
                                     onClick={() => {
                                         const key = prompt("Ingresa tu API Key de Groq (Empieza con 'gsk_'):", localStorage.getItem('ai_api_key') || '');
                                         if (key !== null) {
@@ -1803,7 +2082,7 @@ INSTRUCCIONES:
                             {messages.map((msg, idx) => (
                                 <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                     <div
-                                        className={`max-w-[80%] p-3 rounded-2xl text-sm font-medium leading-relaxed ${msg.role === 'user'
+                                        className={`max-w-[80%] p-3 rounded-2xl text-sm font-medium leading-relaxed whitespace-pre-wrap ${msg.role === 'user'
                                             ? 'bg-blue-600 text-white rounded-br-none shadow-lg'
                                             : 'bg-slate-800 text-slate-200 rounded-bl-none border border-slate-700'
                                             }`}
