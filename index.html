@@ -1,0 +1,2118 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#020617">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Entreno Pablo">
+    <title>Powerbuilding 6M - Pablo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #020617;
+            color: #f8fafc;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior: none;
+        }
+
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes pulse-green {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+            }
+
+            50% {
+                box-shadow: 0 0 20px 10px rgba(16, 185, 129, 0);
+            }
+        }
+
+        .pulse-success {
+            animation: pulse-green 1s ease-in-out;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
+
+        #loader {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #020617;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .btn-active:active {
+            transform: scale(0.95);
+        }
+
+        .install-prompt,
+        .modal-overlay {
+            animation: slideUp 0.4s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        /* AI CHAT STYLES */
+        .chat-container {
+            animation: chatSlideUp 0.3s ease-out;
+        }
+        
+        @keyframes chatSlideUp {
+            from {
+                transform: translateY(20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .typing-dot {
+            animation: typing 1.4s infinite ease-in-out both;
+        }
+        
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        
+        @keyframes typing {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root">
+        <div id="loader">
+            <i class="fas fa-dumbbell fa-spin fa-3x text-blue-500 mb-4"></i>
+            <p class="text-slate-500 font-bold uppercase tracking-widest text-xs">Cargando Entreno Pablo...</p>
+        </div>
+    </div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef, useCallback } = React;
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+
+        // URL del Google Apps Script - LA MISMA QUE YA TENÉS
+        const SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbz3siWBIiF9wKtMdlYgkrcRkuVuabN85fRv-Y0ntXbuu7AysFi04jqvGnUqA_6r7-kI/exec';
+        const SHEET_ID = '1pL_OytXJ-Em6iAdg13PppBj7TlPtdMBMaCbIs5quh1E';
+        const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit`;
+
+        // BASE DE DATOS DE ALIMENTOS (valores por 100g)
+        const FOOD_DATABASE = {
+            'pollo': { kcal: 165, protein: 31, carbs: 0, fat: 3.6 },
+            'carne': { kcal: 250, protein: 26, carbs: 0, fat: 15 },
+            'pescado': { kcal: 206, protein: 22, carbs: 0, fat: 12 },
+            'huevo': { kcal: 155, protein: 13, carbs: 1, fat: 11 },
+            'atun': { kcal: 132, protein: 28, carbs: 0, fat: 1 },
+            'arroz': { kcal: 130, protein: 2.7, carbs: 28, fat: 0.3 },
+            'pasta': { kcal: 131, protein: 5, carbs: 25, fat: 1.1 },
+            'papa': { kcal: 77, protein: 2, carbs: 17, fat: 0.1 },
+            'pan': { kcal: 265, protein: 9, carbs: 49, fat: 3.2 },
+            'avena': { kcal: 389, protein: 17, carbs: 66, fat: 7 },
+            'brocoli': { kcal: 34, protein: 2.8, carbs: 7, fat: 0.4 },
+            'espinaca': { kcal: 23, protein: 2.9, carbs: 3.6, fat: 0.4 },
+            'lechuga': { kcal: 15, protein: 1.4, carbs: 2.9, fat: 0.2 },
+            'tomate': { kcal: 18, protein: 0.9, carbs: 3.9, fat: 0.2 },
+            'leche': { kcal: 42, protein: 3.4, carbs: 5, fat: 1 },
+            'yogur': { kcal: 59, protein: 10, carbs: 3.6, fat: 0.4 },
+            'queso': { kcal: 402, protein: 25, carbs: 1.3, fat: 33 },
+            'banana': { kcal: 89, protein: 1.1, carbs: 23, fat: 0.3 },
+            'manzana': { kcal: 52, protein: 0.3, carbs: 14, fat: 0.2 },
+            'palta': { kcal: 160, protein: 2, carbs: 9, fat: 15 }
+        };
+
+        function App() {
+            const [isLoggedIn, setIsLoggedIn] = useState(false);
+            const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+            const [loginError, setLoginError] = useState('');
+            const [loading, setLoading] = useState(true);
+
+            const [currentWeek, setCurrentWeek] = useState(1);
+            const [completedSets, setCompletedSets] = useState({});
+            const [initialWeights, setInitialWeights] = useState({ sentadilla: 100, muerto: 100, pecho: 80 });
+            const [workoutHistory, setWorkoutHistory] = useState([]);
+
+            const [timer, setTimer] = useState(0);
+            const [isTimerActive, setIsTimerActive] = useState(false);
+            const [targetTime, setTargetTime] = useState(180);
+
+            const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+            const [deferredPrompt, setDeferredPrompt] = useState(null);
+            const [currentView, setCurrentView] = useState('workout');
+
+            const [syncStatus, setSyncStatus] = useState('idle');
+            const [lastSync, setLastSync] = useState(null);
+
+            // ESTADOS ACTIVIDAD
+            const [runningActivities, setRunningActivities] = useState([]);
+            const [footballActivities, setFootballActivities] = useState([]);
+            const [showRunningModal, setShowRunningModal] = useState(false);
+            const [showFootballModal, setShowFootballModal] = useState(false);
+
+            // ESTADOS NUTRICIÓN - NUEVOS
+            const [meals, setMeals] = useState([]);
+            const [showMealModal, setShowMealModal] = useState(false);
+            const [bodyGoals, setBodyGoals] = useState({
+                weightGoal: 0,
+                fatPercentGoal: 0,
+                musclePercentGoal: 0
+            });
+
+            // ESTADOS MEDICIONES - NUEVOS
+            const [measurements, setMeasurements] = useState([]);
+            const [showMeasurementModal, setShowMeasurementModal] = useState(false);
+
+            // ESTADOS HIDRATACIÓN - NUEVOS
+            const [waterIntake, setWaterIntake] = useState({});
+            const [waterGoal, setWaterGoal] = useState(3000);
+
+            // ESTADOS BIENESTAR - NUEVOS
+            const [wellness, setWellness] = useState({});
+            const [showWellnessModal, setShowWellnessModal] = useState(false);
+
+            // ESTADOS V4 - CALENDARIO Y COACHING
+            const [customFoods, setCustomFoods] = useState({});
+            const [coachingNotes, setCoachingNotes] = useState([]);
+            const [calendarView, setCalendarView] = useState(new Date());
+            const [selectedDay, setSelectedDay] = useState(null);
+            const [showDayModal, setShowDayModal] = useState(false);
+            
+            // ESTADO CHAT IA - NUEVO
+            const [showChat, setShowChat] = useState(false);
+
+            const timerIntervalRef = useRef(null);
+
+            // Función sincronizar
+            const syncToSheets = useCallback(async (data) => {
+                try {
+                    setSyncStatus('syncing');
+                    console.log('📤 Enviando a Sheets:', data.action);
+
+                    const response = await fetch(SHEETS_API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain' },
+                        body: JSON.stringify(data)
+                    });
+
+                    const result = await response.json();
+                    console.log('📥 Respuesta de Sheets:', result);
+
+                    if (result.success || result.config) {
+                        setSyncStatus('success');
+                        setLastSync(new Date());
+                        setTimeout(() => setSyncStatus('idle'), 2000);
+                        return true;
+                    } else {
+                        console.error('❌ Error en respuesta:', result);
+                        setSyncStatus('error');
+                        setTimeout(() => setSyncStatus('idle'), 3000);
+                        return false;
+                    }
+                } catch (error) {
+                    console.error('❌ Error sync:', error);
+                    setSyncStatus('error');
+                    setTimeout(() => setSyncStatus('idle'), 3000);
+                    return false;
+                }
+            }, []);
+
+            // PWA Install
+            useEffect(() => {
+                const handler = (e) => {
+                    e.preventDefault();
+                    setDeferredPrompt(e);
+                    if (!window.matchMedia('(display-mode: standalone)').matches) {
+                        setTimeout(() => setShowInstallPrompt(true), 2000);
+                    }
+                };
+                window.addEventListener('beforeinstallprompt', handler);
+                return () => window.removeEventListener('beforeinstallprompt', handler);
+            }, []);
+
+            const handleInstall = async () => {
+                if (!deferredPrompt) return;
+                deferredPrompt.prompt();
+                await deferredPrompt.userChoice;
+                setDeferredPrompt(null);
+                setShowInstallPrompt(false);
+            };
+
+            // Cargar datos
+            useEffect(() => {
+                try {
+                    const savedSession = localStorage.getItem('pablo_session');
+                    const savedWeek = localStorage.getItem('pablo_currentWeek');
+                    const savedSets = localStorage.getItem('pablo_completedSets');
+                    const savedWeights = localStorage.getItem('pablo_initialWeights');
+                    const savedHistory = localStorage.getItem('pablo_workoutHistory');
+                    const savedTargetTime = localStorage.getItem('pablo_targetTime');
+                    const savedLastSync = localStorage.getItem('pablo_lastSync');
+                    const savedRunning = localStorage.getItem('pablo_runningActivities');
+                    const savedFootball = localStorage.getItem('pablo_footballActivities');
+                    const savedMeals = localStorage.getItem('pablo_meals');
+                    const savedGoals = localStorage.getItem('pablo_bodyGoals');
+                    const savedMeasurements = localStorage.getItem('pablo_measurements');
+                    const savedWater = localStorage.getItem('pablo_waterIntake');
+                    const savedWaterGoal = localStorage.getItem('pablo_waterGoal');
+                    const savedWellness = localStorage.getItem('pablo_wellness');
+
+                    if (savedSession === 'active') setIsLoggedIn(true);
+                    if (savedWeek) setCurrentWeek(parseInt(savedWeek));
+                    if (savedSets) setCompletedSets(JSON.parse(savedSets));
+                    if (savedWeights) setInitialWeights(JSON.parse(savedWeights));
+                    if (savedHistory) setWorkoutHistory(JSON.parse(savedHistory));
+                    if (savedTargetTime) setTargetTime(parseInt(savedTargetTime));
+                    if (savedLastSync) setLastSync(new Date(savedLastSync));
+                    if (savedRunning) setRunningActivities(JSON.parse(savedRunning));
+                    if (savedFootball) setFootballActivities(JSON.parse(savedFootball));
+                    if (savedMeals) setMeals(JSON.parse(savedMeals));
+                    if (savedGoals) setBodyGoals(JSON.parse(savedGoals));
+                    if (savedMeasurements) setMeasurements(JSON.parse(savedMeasurements));
+                    if (savedWater) setWaterIntake(JSON.parse(savedWater));
+                    if (savedWaterGoal) setWaterGoal(parseInt(savedWaterGoal));
+                    if (savedWellness) setWellness(JSON.parse(savedWellness));
+                } catch (err) {
+                    console.error('Error cargando datos:', err);
+                }
+
+                // Cargar custom foods V4
+                loadCustomFoods();
+                loadCoachingNotes();
+
+                setLoading(false);
+            }, []);
+
+            // Guardar datos
+            const saveData = useCallback((updates = {}) => {
+                try {
+                    Object.keys(updates).forEach(key => {
+                        const storageKey = `pablo_${key}`;
+                        const value = updates[key];
+                        if (typeof value === 'object') {
+                            localStorage.setItem(storageKey, JSON.stringify(value));
+                        } else {
+                            localStorage.setItem(storageKey, value);
+                        }
+                    });
+                } catch (err) {
+                    console.error('Error guardando datos:', err);
+                }
+            }, []);
+
+            // Timer
+            useEffect(() => {
+                if (isTimerActive && timer > 0) {
+                    timerIntervalRef.current = setInterval(() => {
+                        setTimer(t => {
+                            if (t <= 1) {
+                                setIsTimerActive(false);
+                                if ('vibrate' in navigator) navigator.vibrate([200, 100, 200]);
+                                if ('Notification' in window && Notification.permission === 'granted') {
+                                    new Notification('¡Descanso terminado!', {
+                                        body: 'Es hora de la siguiente serie',
+                                        vibrate: [200, 100, 200]
+                                    });
+                                }
+                                return 0;
+                            }
+                            return t - 1;
+                        });
+                    }, 1000);
+                } else {
+                    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+                }
+                return () => {
+                    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+                };
+            }, [isTimerActive, timer]);
+
+            const startTimer = useCallback(() => {
+                setTimer(targetTime);
+                setIsTimerActive(true);
+                if ('Notification' in window && Notification.permission === 'default') {
+                    Notification.requestPermission();
+                }
+            }, [targetTime]);
+
+            const stopTimer = useCallback(() => {
+                setIsTimerActive(false);
+            }, []);
+
+            const toggleSet = useCallback(async (dayId, exerciseName, setIndex, isWarmup = false, weight = 0, totalSets = 0, reps = 0) => {
+                const key = `${currentWeek}-${dayId}-${exerciseName}-${isWarmup ? 'warmup' : 'work'}-${setIndex}`;
+                const newCompletedSets = { ...completedSets, [key]: !completedSets[key] };
+                setCompletedSets(newCompletedSets);
+                saveData({ completedSets: newCompletedSets });
+
+                await syncToSheets({
+                    action: 'log_set',
+                    week: currentWeek,
+                    day: dayId,
+                    exercise: exerciseName,
+                    weight: weight,
+                    totalSets: totalSets,
+                    reps: reps,
+                    setNumber: setIndex + 1,
+                    isWarmup: isWarmup,
+                    completed: !completedSets[key]
+                });
+
+                if (!isWarmup && !completedSets[key]) {
+                    startTimer();
+                }
+
+                if (!completedSets[key]) {
+                    const newHistory = [...workoutHistory, {
+                        date: new Date().toISOString(),
+                        week: currentWeek,
+                        day: dayId,
+                        exercise: exerciseName,
+                        setNumber: setIndex + 1,
+                        isWarmup
+                    }];
+                    setWorkoutHistory(newHistory);
+                    saveData({ workoutHistory: newHistory });
+                }
+            }, [currentWeek, completedSets, saveData, syncToSheets, startTimer, workoutHistory]);
+
+            const stats = useMemo(() => {
+                const weekInCycle = ((currentWeek - 1) % 4) + 1;
+                const cycleNumber = Math.floor((currentWeek - 1) / 4);
+
+                const setsReps = [
+                    { sets: 5, reps: 5 },
+                    { sets: 6, reps: 6 },
+                    { sets: 7, reps: 7 },
+                    { sets: 8, reps: 8 }
+                ];
+
+                const current = setsReps[weekInCycle - 1];
+                const increment = cycleNumber * 2.5;
+
+                return {
+                    sets: current.sets,
+                    reps: current.reps,
+                    increment: increment
+                };
+            }, [currentWeek]);
+
+            // CALCULAR MACROS DE ALIMENTO - NUEVO
+            const calculateFoodMacros = useCallback((foodName, grams) => {
+                const normalized = foodName.toLowerCase().trim();
+                const food = FOOD_DATABASE[normalized];
+
+                if (food) {
+                    const multiplier = grams / 100;
+                    return {
+                        kcal: Math.round(food.kcal * multiplier),
+                        protein: Math.round(food.protein * multiplier * 10) / 10,
+                        carbs: Math.round(food.carbs * multiplier * 10) / 10,
+                        fat: Math.round(food.fat * multiplier * 10) / 10
+                    };
+                }
+                return null;
+            }, []);
+
+            // NUTRICIÓN DIARIA - NUEVO
+            const getDailyNutrition = useCallback(() => {
+                const today = new Date().toDateString();
+                const todayMeals = meals.filter(m => new Date(m.date).toDateString() === today);
+
+                return todayMeals.reduce((acc, meal) => ({
+                    kcal: acc.kcal + meal.kcal,
+                    protein: acc.protein + meal.protein,
+                    carbs: acc.carbs + meal.carbs,
+                    fat: acc.fat + meal.fat
+                }), { kcal: 0, protein: 0, carbs: 0, fat: 0 });
+            }, [meals]);
+
+            // AGUA DEL DÍA - NUEVO
+            const getTodayWater = useCallback(() => {
+                const today = new Date().toDateString();
+                return waterIntake[today] || 0;
+            }, [waterIntake]);
+
+            // AGREGAR AGUA - NUEVO
+            const addWater = useCallback((ml) => {
+                const today = new Date().toDateString();
+                const newIntake = { ...waterIntake, [today]: (waterIntake[today] || 0) + ml };
+                setWaterIntake(newIntake);
+                saveData({ waterIntake: newIntake });
+                syncToSheets({
+                    action: 'log_water',
+                    date: new Date().toISOString(),
+                    ml: ml,
+                    total: newIntake[today]
+                });
+            }, [waterIntake, saveData, syncToSheets]);
+
+            // ÚLTIMA MEDICIÓN - NUEVO
+            const getLatestMeasurement = useCallback(() => {
+                if (measurements.length === 0) return null;
+                return measurements[measurements.length - 1];
+            }, [measurements]);
+
+            // CALCULAR OBJETIVOS - NUEVO
+            const calculateDerivedGoals = useCallback((weight, fatPercent, musclePercent) => {
+                return {
+                    fatKg: Math.round(weight * fatPercent / 100 * 10) / 10,
+                    muscleKg: Math.round(weight * musclePercent / 100 * 10) / 10
+                };
+            }, []);
+
+            // CARGAR ALIMENTOS CUSTOM - V4
+            const loadCustomFoods = useCallback(async () => {
+                try {
+                    console.log('📥 Cargando alimentos custom...');
+                    const response = await fetch(SHEETS_API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain' },
+                        body: JSON.stringify({ action: 'get_custom_foods' })
+                    });
+                    const data = await response.json();
+                    console.log('📦 Custom foods recibidos:', Object.keys(data || {}).length);
+
+                    if (data && typeof data === 'object') {
+                        setCustomFoods(data);
+                        saveData({ customFoods: data });
+                    }
+                } catch (error) {
+                    console.error('❌ Error loading custom foods:', error);
+                }
+            }, []);
+
+            // GUARDAR ALIMENTO CUSTOM - V4
+            const saveCustomFood = useCallback(async (food, macros) => {
+                console.log('💾 Guardando alimento custom:', food);
+                const newCustomFoods = { ...customFoods, [food.toLowerCase()]: macros };
+                setCustomFoods(newCustomFoods);
+                saveData({ customFoods: newCustomFoods });
+
+                await syncToSheets({
+                    action: 'save_custom_food',
+                    food: food,
+                    kcal: macros.kcal,
+                    protein: macros.protein,
+                    carbs: macros.carbs,
+                    fat: macros.fat
+                });
+
+                console.log('✅ Alimento guardado:', food);
+            }, [customFoods, saveData, syncToSheets]);
+
+            // CALCULAR MACROS CON CUSTOM FOODS - V4
+            const calculateFoodMacrosV4 = useCallback((foodName, grams) => {
+                const normalized = foodName.toLowerCase().trim();
+
+                // Primero buscar en custom foods
+                if (customFoods[normalized]) {
+                    const food = customFoods[normalized];
+                    const multiplier = grams / 100;
+                    return {
+                        kcal: Math.round(food.kcal * multiplier),
+                        protein: Math.round(food.protein * multiplier * 10) / 10,
+                        carbs: Math.round(food.carbs * multiplier * 10) / 10,
+                        fat: Math.round(food.fat * multiplier * 10) / 10
+                    };
+                }
+
+                // Sino buscar en base de datos estática
+                const food = FOOD_DATABASE[normalized];
+                if (food) {
+                    const multiplier = grams / 100;
+                    return {
+                        kcal: Math.round(food.kcal * multiplier),
+                        protein: Math.round(food.protein * multiplier * 10) / 10,
+                        carbs: Math.round(food.carbs * multiplier * 10) / 10,
+                        fat: Math.round(food.fat * multiplier * 10) / 10
+                    };
+                }
+                return null;
+            }, [customFoods]);
+
+            // CARGAR NOTAS DE COACHING - V4
+            const loadCoachingNotes = useCallback(async () => {
+                try {
+                    console.log('📥 Cargando notas del coach...');
+                    const response = await fetch(SHEET_URL.replace('/edit', '/gviz/tq?tqx=out:json&sheet=Coaching_Notes'));
+                    const text = await response.text();
+
+                    // Parsear respuesta de Google Sheets
+                    const jsonString = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
+                    const data = JSON.parse(jsonString);
+
+                    if (data.table && data.table.rows) {
+                        const notes = data.table.rows.map(row => ({
+                            date: row.c[1]?.v || '',
+                            week: row.c[2]?.v || 0,
+                            type: row.c[3]?.v || 'consejo',
+                            note: row.c[4]?.v || '',
+                            context: row.c[5]?.v || ''
+                        })).filter(note => note.note);
+
+                        console.log('📝 Notas cargadas:', notes.length);
+                        setCoachingNotes(notes);
+                    }
+                } catch (error) {
+                    console.log('ℹ️ No se pudieron cargar notas (puede ser normal si no hay notas aún)');
+                }
+            }, []);
+
+            // OBTENER ACTIVIDADES DE UN DÍA - V4
+            const getDayActivities = useCallback((date) => {
+                const dateStr = date.toDateString();
+
+                return {
+                    workouts: workoutHistory.filter(w => new Date(w.date).toDateString() === dateStr),
+                    running: runningActivities.filter(r => new Date(r.date).toDateString() === dateStr),
+                    football: footballActivities.filter(f => new Date(f.date).toDateString() === dateStr),
+                    meals: meals.filter(m => new Date(m.date).toDateString() === dateStr),
+                    water: waterIntake[dateStr] || 0,
+                    wellness: wellness[dateStr] || null
+                };
+            }, [workoutHistory, runningActivities, footballActivities, meals, waterIntake, wellness]);
+
+
+            if (loading) {
+                return (
+                    <div id="loader">
+                        <i className="fas fa-dumbbell fa-spin fa-3x text-blue-500 mb-4"></i>
+                        <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Cargando...</p>
+                    </div>
+                );
+            }
+
+            if (!isLoggedIn) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+                        <div className="w-full max-w-sm fade-in">
+                            <div className="text-center mb-8">
+                                <div className="w-20 h-20 bg-blue-600/20 rounded-3xl mx-auto flex items-center justify-center mb-6 border border-blue-500/30 shadow-xl shadow-blue-500/10">
+                                    <i className="fas fa-dumbbell text-blue-500 text-3xl"></i>
+                                </div>
+                                <h1 className="text-3xl font-black italic uppercase tracking-tighter mb-2">Entreno Pablo</h1>
+                                <p className="text-slate-500 text-xs uppercase font-bold tracking-widest">Powerbuilding 6 Meses</p>
+                            </div>
+                            <form onSubmit={(e) => {
+                                e.preventDefault();
+                                if (loginForm.username.toLowerCase() === 'pablobernardo' && loginForm.password === 'timon') {
+                                    setIsLoggedIn(true);
+                                    localStorage.setItem('pablo_session', 'active');
+                                    setLoginError('');
+                                } else {
+                                    setLoginError('Credenciales incorrectas');
+                                }
+                            }} className="space-y-4">
+                                <input
+                                    type="text"
+                                    placeholder="Usuario"
+                                    value={loginForm.username}
+                                    className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl outline-none focus:border-blue-500 text-white transition-colors"
+                                    onChange={e => setLoginForm({ ...loginForm, username: e.target.value })}
+                                />
+                                <input
+                                    type="password"
+                                    placeholder="Contraseña"
+                                    value={loginForm.password}
+                                    className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl outline-none focus:border-blue-500 text-white transition-colors"
+                                    onChange={e => setLoginForm({ ...loginForm, password: e.target.value })}
+                                />
+                                {loginError && <p className="text-red-500 text-xs font-bold text-center animate-pulse">{loginError}</p>}
+                                <button className="w-full bg-gradient-to-r from-blue-600 to-blue-500 p-4 rounded-xl font-black uppercase italic tracking-widest active:scale-95 transition-all shadow-lg shadow-blue-600/20">
+                                    Entrar
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                );
+            }
+
+            const routine = [
+                {
+                    id: 'Lunes', title: 'Lunes: Pierna Fuerte', ex: [
+                        { name: 'Sentadilla', w: initialWeights.sentadilla + stats.increment, s: stats.sets, r: stats.reps, wu: true, type: 'fuerte' },
+                        { name: 'Pecho Plano', w: initialWeights.pecho + stats.increment, s: stats.sets, r: stats.reps, wu: true, type: 'fuerte' },
+                        { name: 'Peso Muerto (T)', w: initialWeights.muerto + stats.increment, s: 3, r: 5, wu: false, type: 'tranquilo' }
+                    ]
+                },
+                {
+                    id: 'Miercoles', title: 'Miércoles: Pecho Fuerte', ex: [
+                        { name: 'Pecho Plano', w: initialWeights.pecho + stats.increment, s: stats.sets, r: stats.reps, wu: true, type: 'fuerte' },
+                        { name: 'Sentadilla (T)', w: initialWeights.sentadilla + stats.increment, s: 3, r: 5, wu: false, type: 'tranquilo' },
+                        { name: 'Remo Barra', w: 'Moderado', s: 4, r: 10, wu: false, type: 'accesorio' }
+                    ]
+                },
+                {
+                    id: 'Viernes', title: 'Viernes: Muerto Fuerte', ex: [
+                        { name: 'Peso Muerto', w: initialWeights.muerto + stats.increment, s: stats.sets, r: stats.reps, wu: true, type: 'fuerte' },
+                        { name: 'Sentadilla (T)', w: initialWeights.sentadilla + stats.increment, s: 3, r: 5, wu: false, type: 'tranquilo' },
+                        { name: 'Pecho (T)', w: Math.round((initialWeights.pecho + stats.increment) * 0.8), s: 3, r: 5, wu: false, type: 'tranquilo' }
+                    ]
+                }
+            ];
+
+
+            // VISTAS Y MODALES EXTRAÍDOS FUERA POR PERFORMANCE
+
+
+            // RENDERIZADO PRINCIPAL Y NAVEGACIÓN
+            return (
+                <>
+                    {currentView === 'workout' && (
+                        <WorkoutView
+                            currentWeek={currentWeek}
+                            setCurrentWeek={(w) => { setCurrentWeek(w); saveData({ currentWeek: w }); }}
+                            syncStatus={syncStatus}
+                            stats={stats}
+                            isTimerActive={isTimerActive}
+                            timer={timer}
+                            startTimer={startTimer}
+                            stopTimer={stopTimer}
+                            routine={routine}
+                            completedSets={completedSets}
+                            toggleSet={toggleSet}
+                        />
+                    )}
+                    {currentView === 'nutrition' && (
+                        <NutritionView
+                            nutritionData={getDailyNutrition()}
+                            todayWater={getTodayWater()}
+                            waterGoal={waterGoal}
+                            latestMeasurement={getLatestMeasurement()}
+                            wellness={wellness}
+                            runningActivities={runningActivities}
+                            footballActivities={footballActivities}
+                            bodyGoals={bodyGoals}
+                            setBodyGoals={setBodyGoals}
+                            saveData={saveData}
+                            syncToSheets={syncToSheets}
+                            addWater={addWater}
+                            measurements={measurements}
+                            meals={meals}
+                            setShowMealModal={setShowMealModal}
+                            setShowRunningModal={setShowRunningModal}
+                            setShowFootballModal={setShowFootballModal}
+                            setShowWellnessModal={setShowWellnessModal}
+                            setShowMeasurementModal={setShowMeasurementModal}
+                        />
+                    )}
+                    {currentView === 'calendar' && (
+                        <CalendarView
+                            calendarView={calendarView}
+                            setCalendarView={setCalendarView}
+                            waterGoal={waterGoal}
+                            getDayActivities={getDayActivities}
+                            setSelectedDay={setSelectedDay}
+                            setShowDayModal={setShowDayModal}
+                        />
+                    )}
+                    {currentView === 'history' && (
+                        <HistoryView
+                            workoutHistory={workoutHistory}
+                        />
+                    )}
+                    {currentView === 'settings' && (
+                        <SettingsView
+                            syncStatus={syncStatus}
+                            lastSync={lastSync}
+                            SHEET_URL={SHEET_URL}
+                            coachingNotes={coachingNotes}
+                            initialWeights={initialWeights}
+                            setInitialWeights={setInitialWeights}
+                            saveData={saveData}
+                            targetTime={targetTime}
+                            setTargetTime={setTargetTime}
+                            waterGoal={waterGoal}
+                            setWaterGoal={setWaterGoal}
+                            currentWeek={currentWeek}
+                            completedSets={completedSets}
+                            setCompletedSets={setCompletedSets}
+                        />
+                    )}
+
+                    {/* Modales */}
+                    {showRunningModal && (
+                        <RunningModal
+                            setShowRunningModal={setShowRunningModal}
+                            runningActivities={runningActivities}
+                            setRunningActivities={setRunningActivities}
+                            saveData={saveData}
+                            syncToSheets={syncToSheets}
+                        />
+                    )}
+                    {showFootballModal && (
+                        <FootballModal
+                            setShowFootballModal={setShowFootballModal}
+                            footballActivities={footballActivities}
+                            setFootballActivities={setFootballActivities}
+                            saveData={saveData}
+                            syncToSheets={syncToSheets}
+                        />
+                    )}
+                    {showMealModal && (
+                        <MealModal
+                            setShowMealModal={setShowMealModal}
+                            meals={meals}
+                            setMeals={setMeals}
+                            saveData={saveData}
+                            syncToSheets={syncToSheets}
+                            customFoods={customFoods}
+                            calculateFoodMacrosV4={calculateFoodMacrosV4}
+                        />
+                    )}
+                    {showMeasurementModal && (
+                        <MeasurementModal
+                            setShowMeasurementModal={setShowMeasurementModal}
+                            measurements={measurements}
+                            setMeasurements={setMeasurements}
+                            saveData={saveData}
+                            syncToSheets={syncToSheets}
+                        />
+                    )}
+                    {showWellnessModal && (
+                        <WellnessModal
+                            setShowWellnessModal={setShowWellnessModal}
+                            wellness={wellness}
+                            setWellness={setWellness}
+                            saveData={saveData}
+                            syncToSheets={syncToSheets}
+                        />
+                    )}
+                    {showDayModal && (
+                        <DayModal
+                            setShowDayModal={setShowDayModal}
+                            selectedDay={selectedDay}
+                            getDayActivities={getDayActivities}
+                            waterGoal={waterGoal}
+                        />
+                    )}
+
+
+                    {/* Botón Flotante Chat IA */}
+                    <button
+                        onClick={() => setShowChat(true)}
+                        className="fixed bottom-24 right-4 z-40 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 p-3 sm:p-4 rounded-full shadow-xl shadow-purple-500/30 hover:scale-110 active:scale-95 transition-all animate-bounce-slow"
+                    >
+                        <i className="fas fa-robot text-white text-xl sm:text-2xl"></i>
+                    </button>
+
+                    {/* Modal Chat IA */}
+                    {showChat && (
+                        <AIChat
+                            onClose={() => setShowChat(false)}
+                            userProfile={loginForm}
+                            contextData={{
+                                nutrition: getDailyNutrition(),
+                                water: getTodayWater(),
+                                workout: getDayActivities(new Date()).workouts,
+                                goals: bodyGoals
+                            }}
+                        />
+                    )}
+
+                    {/* Bottom Navigation - 4 PESTAÑAS */}
+                    <nav className="fixed bottom-0 left-0 right-0 bg-slate-950/95 backdrop-blur-md border-t border-slate-800 p-2 flex justify-around items-center max-w-md mx-auto z-40">
+                        <button
+                            onClick={() => setCurrentView('workout')}
+                            className={`flex flex-col items-center gap-1 px-1 py-2 rounded-xl transition-all ${currentView === 'workout' ? 'text-blue-400' : 'text-slate-600'}`}
+                        >
+                            <i className="fas fa-dumbbell text-sm"></i>
+                            <span className="text-[7px] font-black uppercase">Entreno</span>
+                        </button>
+                        <button
+                            onClick={() => setCurrentView('nutrition')}
+                            className={`flex flex-col items-center gap-1 px-1 py-2 rounded-xl transition-all ${currentView === 'nutrition' ? 'text-purple-400' : 'text-slate-600'}`}
+                        >
+                            <i className="fas fa-utensils text-sm"></i>
+                            <span className="text-[7px] font-black uppercase">Nutrición</span>
+                        </button>
+                        <button
+                            onClick={() => setCurrentView('calendar')}
+                            className={`flex flex-col items-center gap-1 px-1 py-2 rounded-xl transition-all ${currentView === 'calendar' ? 'text-yellow-400' : 'text-slate-600'}`}
+                        >
+                            <i className="fas fa-calendar-alt text-sm"></i>
+                            <span className="text-[7px] font-black uppercase">Calendario</span>
+                        </button>
+                        <button
+                            onClick={() => setCurrentView('history')}
+                            className={`flex flex-col items-center gap-1 px-1 py-2 rounded-xl transition-all ${currentView === 'history' ? 'text-emerald-400' : 'text-slate-600'}`}
+                        >
+                            <i className="fas fa-list text-sm"></i>
+                            <span className="text-[7px] font-black uppercase">Historial</span>
+                        </button>
+                        <button
+                            onClick={() => setCurrentView('settings')}
+                            className={`flex flex-col items-center gap-1 px-1 py-2 rounded-xl transition-all ${currentView === 'settings' ? 'text-blue-400' : 'text-slate-600'}`}
+                        >
+                            <i className="fas fa-cog text-sm"></i>
+                            <span className="text-[7px] font-black uppercase">Config</span>
+                        </button>
+                    </nav>
+
+                    {/* Install Prompt */}
+                    {showInstallPrompt && (
+                        <div className="fixed bottom-20 left-4 right-4 max-w-md mx-auto install-prompt">
+                            <div className="bg-gradient-to-r from-blue-600 to-blue-500 p-4 rounded-2xl shadow-2xl border border-blue-400/30">
+                                <div className="flex items-start gap-3">
+                                    <i className="fas fa-mobile-alt text-white text-2xl mt-1"></i>
+                                    <div className="flex-1">
+                                        <h3 className="font-black text-white text-sm mb-1">Instalá la App</h3>
+                                        <p className="text-blue-100 text-xs mb-3">Agregala a tu pantalla de inicio</p>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={handleInstall}
+                                                className="bg-white text-blue-600 px-4 py-2 rounded-lg font-black text-xs uppercase active:scale-95 transition-all"
+                                            >
+                                                Instalar
+                                            </button>
+                                            <button
+                                                onClick={() => setShowInstallPrompt(false)}
+                                                className="bg-blue-700/50 text-white px-4 py-2 rounded-lg font-bold text-xs active:scale-95 transition-all"
+                                            >
+                                                Ahora no
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </>
+            );
+        }
+
+        // ==========================================
+        // COMPONENTES EXTERNOS (EVITAN PARPADEO)
+        // ==========================================
+
+        const RunningModal = ({ setShowRunningModal, runningActivities, setRunningActivities, saveData, syncToSheets }) => {
+            const [formData, setFormData] = React.useState({ km: '', kcal: '' });
+
+            return (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50" onClick={() => setShowRunningModal(false)}>
+                    <div className="bg-slate-900 rounded-3xl p-6 max-w-sm w-full border border-slate-800 modal-overlay" onClick={e => e.stopPropagation()}>
+                        <h3 className="text-xl font-black uppercase italic mb-4 text-emerald-400">🏃 Agregar Running</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-xs text-slate-500 font-bold block mb-1 uppercase">Distancia (km)</label>
+                                <input
+                                    type="number"
+                                    step="0.1"
+                                    value={formData.km}
+                                    onChange={e => setFormData({ ...formData, km: e.target.value })}
+                                    className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-white outline-none focus:border-emerald-500"
+                                    autoFocus
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-500 font-bold block mb-1 uppercase">Calorías (kcal)</label>
+                                <input
+                                    type="number"
+                                    value={formData.kcal}
+                                    onChange={e => setFormData({ ...formData, kcal: e.target.value })}
+                                    className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-white outline-none focus:border-emerald-500"
+                                />
+                            </div>
+                            <button
+                                onClick={() => {
+                                    if (!formData.km) return;
+                                    const newActivity = {
+                                        date: new Date().toISOString(),
+                                        km: parseFloat(formData.km),
+                                        kcal: parseInt(formData.kcal) || 0
+                                    };
+                                    const newList = [...runningActivities, newActivity];
+                                    setRunningActivities(newList);
+                                    saveData({ runningActivities: newList });
+                                    syncToSheets({ action: 'log_running', ...newActivity });
+                                    setShowRunningModal(false);
+                                }}
+                                className="w-full bg-emerald-600 text-white p-4 rounded-xl font-black uppercase italic tracking-widest active:scale-95 transition-all shadow-lg shadow-emerald-500/20"
+                            >
+                                Registrar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const FootballModal = ({ setShowFootballModal, footballActivities, setFootballActivities, saveData, syncToSheets }) => {
+            const [formData, setFormData] = React.useState({ goals: '', assists: '', result: 'Win' });
+
+            return (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50" onClick={() => setShowFootballModal(false)}>
+                    <div className="bg-slate-900 rounded-3xl p-6 max-w-sm w-full border border-slate-800 modal-overlay" onClick={e => e.stopPropagation()}>
+                        <h3 className="text-xl font-black uppercase italic mb-4 text-emerald-400">⚽ Agregar Fútbol</h3>
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs text-slate-500 font-bold block mb-1 uppercase">Goles</label>
+                                    <input
+                                        type="number"
+                                        value={formData.goals}
+                                        onChange={e => setFormData({ ...formData, goals: e.target.value })}
+                                        className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-white outline-none focus:border-emerald-500"
+                                        autoFocus
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-slate-500 font-bold block mb-1 uppercase">Asistencias</label>
+                                    <input
+                                        type="number"
+                                        value={formData.assists}
+                                        onChange={e => setFormData({ ...formData, assists: e.target.value })}
+                                        className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-white outline-none focus:border-emerald-500"
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-500 font-bold block mb-1 uppercase">Resultado</label>
+                                <div className="flex gap-2">
+                                    {['Win', 'Draw', 'Loss'].map(r => (
+                                        <button
+                                            key={r}
+                                            onClick={() => setFormData({ ...formData, result: r })}
+                                            className={`flex-1 p-2 rounded-lg font-bold text-xs transition-all ${formData.result === r ? 'bg-emerald-600 text-white' : 'bg-slate-950 text-slate-500 border border-slate-800'}`}
+                                        >
+                                            {r === 'Win' ? 'Gané' : r === 'Draw' ? 'Empate' : 'Perdí'}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    const newActivity = {
+                                        date: new Date().toISOString(),
+                                        goals: parseInt(formData.goals) || 0,
+                                        assists: parseInt(formData.assists) || 0,
+                                        result: formData.result
+                                    };
+                                    const newList = [...footballActivities, newActivity];
+                                    setFootballActivities(newList);
+                                    saveData({ footballActivities: newList });
+                                    syncToSheets({ action: 'log_football', ...newActivity });
+                                    setShowFootballModal(false);
+                                }}
+                                className="w-full bg-emerald-600 text-white p-4 rounded-xl font-black uppercase italic tracking-widest active:scale-95 transition-all shadow-lg shadow-emerald-500/20"
+                            >
+                                Registrar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const MealModal = ({ setShowMealModal, meals, setMeals, saveData, syncToSheets, customFoods, calculateFoodMacrosV4 }) => {
+            const [formData, setFormData] = React.useState({
+                food: '',
+                grams: '',
+                autoCalc: true,
+                kcal: '',
+                protein: '',
+                carbs: '',
+                fat: ''
+            });
+
+            return (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50" onClick={() => setShowMealModal(false)}>
+                    <div className="bg-slate-900 rounded-3xl p-6 max-w-sm w-full border border-slate-800 modal-overlay" onClick={e => e.stopPropagation()}>
+                        <h3 className="text-xl font-black uppercase italic mb-4 text-purple-400">🥗 Agregar Comida</h3>
+                        <div className="space-y-4 max-h-[70vh] overflow-y-auto no-scrollbar pr-1">
+                            <div>
+                                <label className="text-xs text-slate-500 font-bold block mb-1 uppercase">Alimento / Nombre</label>
+                                <input
+                                    type="text"
+                                    list="food-suggestions"
+                                    value={formData.food}
+                                    onChange={e => {
+                                        const name = e.target.value;
+                                        if (formData.autoCalc) {
+                                            const g = parseFloat(formData.grams) || 100;
+                                            const macros = calculateFoodMacrosV4(name, g);
+                                            if (macros) {
+                                                setFormData({
+                                                    ...formData,
+                                                    food: name,
+                                                    kcal: macros.kcal,
+                                                    protein: macros.protein,
+                                                    carbs: macros.carbs,
+                                                    fat: macros.fat
+                                                });
+                                            } else {
+                                                setFormData({ ...formData, food: name });
+                                            }
+                                        } else {
+                                            setFormData({ ...formData, food: name });
+                                        }
+                                    }}
+                                    className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-white outline-none focus:border-purple-500"
+                                    autoFocus
+                                />
+                                <datalist id="food-suggestions">
+                                    {Object.keys(FOOD_DATABASE).map(f => <option key={f} value={f} />)}
+                                    {Object.keys(customFoods || {}).map(f => <option key={f} value={f} />)}
+                                </datalist>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs text-slate-500 font-bold block mb-1 uppercase">Gramos</label>
+                                    <input
+                                        type="number"
+                                        value={formData.grams}
+                                        onChange={e => {
+                                            const g = parseFloat(e.target.value) || 0;
+                                            if (formData.autoCalc) {
+                                                const macros = calculateFoodMacrosV4(formData.food, g);
+                                                if (macros) {
+                                                    setFormData({
+                                                        ...formData,
+                                                        grams: e.target.value,
+                                                        kcal: macros.kcal,
+                                                        protein: macros.protein,
+                                                        carbs: macros.carbs,
+                                                        fat: macros.fat
+                                                    });
+                                                } else {
+                                                    setFormData({ ...formData, grams: e.target.value });
+                                                }
+                                            } else {
+                                                setFormData({ ...formData, grams: e.target.value });
+                                            }
+                                        }}
+                                        className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-white outline-none focus:border-purple-500"
+                                    />
+                                </div>
+                                <div className="flex items-end pb-2">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={formData.autoCalc}
+                                            onChange={e => setFormData({ ...formData, autoCalc: e.target.checked })}
+                                            className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-purple-600"
+                                        />
+                                        <span className="text-[10px] font-bold text-slate-500 uppercase">Auto</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-[10px] text-slate-600 font-bold block mb-1 uppercase">Kcal</label>
+                                    <input
+                                        type="number"
+                                        value={formData.kcal}
+                                        onChange={e => setFormData({ ...formData, kcal: e.target.value, autoCalc: false })}
+                                        className="w-full bg-slate-950/50 border border-slate-800 p-2 rounded-lg text-white text-sm outline-none focus:border-purple-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] text-slate-600 font-bold block mb-1 uppercase">Prot (g)</label>
+                                    <input
+                                        type="number"
+                                        value={formData.protein}
+                                        onChange={e => setFormData({ ...formData, protein: e.target.value, autoCalc: false })}
+                                        className="w-full bg-slate-950/50 border border-slate-800 p-2 rounded-lg text-white text-sm outline-none focus:border-purple-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] text-slate-600 font-bold block mb-1 uppercase">Carbs (g)</label>
+                                    <input
+                                        type="number"
+                                        value={formData.carbs}
+                                        onChange={e => setFormData({ ...formData, carbs: e.target.value, autoCalc: false })}
+                                        className="w-full bg-slate-950/50 border border-slate-800 p-2 rounded-lg text-white text-sm outline-none focus:border-purple-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] text-slate-600 font-bold block mb-1 uppercase">Grasa (g)</label>
+                                    <input
+                                        type="number"
+                                        value={formData.fat}
+                                        onChange={e => setFormData({ ...formData, fat: e.target.value, autoCalc: false })}
+                                        className="w-full bg-slate-950/50 border border-slate-800 p-2 rounded-lg text-white text-sm outline-none focus:border-purple-500"
+                                    />
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={() => {
+                                    if (!formData.food) return;
+                                    const newMeal = {
+                                        date: new Date().toISOString(),
+                                        food: formData.food,
+                                        grams: parseFloat(formData.grams) || 0,
+                                        kcal: parseInt(formData.kcal) || 0,
+                                        protein: parseInt(formData.protein) || 0,
+                                        carbs: parseInt(formData.carbs) || 0,
+                                        fat: parseInt(formData.fat) || 0
+                                    };
+                                    const newList = [...meals, newMeal];
+                                    setMeals(newList);
+                                    saveData({ meals: newList });
+                                    syncToSheets({ action: 'log_meal', ...newMeal });
+                                    setShowMealModal(false);
+                                }}
+                                className="w-full bg-purple-600 text-white p-4 rounded-xl font-black uppercase italic tracking-widest active:scale-95 transition-all shadow-lg shadow-purple-500/20"
+                            >
+                                Guardar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const MeasurementModal = ({ setShowMeasurementModal, measurements, setMeasurements, saveData, syncToSheets }) => {
+            const [formData, setFormData] = React.useState({ weight: '', fatPercent: '', musclePercent: '' });
+
+            return (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50" onClick={() => setShowMeasurementModal(false)}>
+                    <div className="bg-slate-900 rounded-3xl p-6 max-w-sm w-full border border-slate-800 modal-overlay" onClick={e => e.stopPropagation()}>
+                        <h3 className="text-xl font-black uppercase italic mb-4 text-blue-400">📏 Nueva Medición</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-xs text-slate-500 font-bold block mb-1 uppercase">Peso (kg)</label>
+                                <input
+                                    type="number"
+                                    step="0.1"
+                                    value={formData.weight}
+                                    onChange={e => setFormData({ ...formData, weight: e.target.value })}
+                                    className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-white outline-none focus:border-blue-500"
+                                    autoFocus
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs text-slate-500 font-bold block mb-1 uppercase">% Grasa</label>
+                                    <input
+                                        type="number"
+                                        step="0.1"
+                                        value={formData.fatPercent}
+                                        onChange={e => setFormData({ ...formData, fatPercent: e.target.value })}
+                                        className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-white outline-none focus:border-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-slate-500 font-bold block mb-1 uppercase">% Músculo</label>
+                                    <input
+                                        type="number"
+                                        step="0.1"
+                                        value={formData.musclePercent}
+                                        onChange={e => setFormData({ ...formData, musclePercent: e.target.value })}
+                                        className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-white outline-none focus:border-blue-500"
+                                    />
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    if (!formData.weight) return;
+                                    const newM = {
+                                        date: new Date().toISOString(),
+                                        weight: parseFloat(formData.weight),
+                                        fatPercent: parseFloat(formData.fatPercent) || 0,
+                                        musclePercent: parseFloat(formData.musclePercent) || 0
+                                    };
+                                    const newList = [...measurements, newM];
+                                    setMeasurements(newList);
+                                    saveData({ measurements: newList });
+                                    syncToSheets({ action: 'log_measurement', ...newM });
+                                    setShowMeasurementModal(false);
+                                }}
+                                className="w-full bg-blue-600 text-white p-4 rounded-xl font-black uppercase italic tracking-widest active:scale-95 transition-all shadow-lg shadow-blue-500/20"
+                            >
+                                Guardar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const WellnessModal = ({ setShowWellnessModal, wellness, setWellness, saveData, syncToSheets }) => {
+            const today = new Date().toDateString();
+            const [formData, setFormData] = React.useState(wellness[today] || {
+                sleep: 3, // 1-5
+                energy: 3,
+                stress: 3,
+                soreness: 3
+            });
+
+            const metrics = [
+                { id: 'sleep', label: 'Sueño', icon: 'fa-moon', color: 'text-indigo-400' },
+                { id: 'energy', label: 'Energía', icon: 'fa-bolt', color: 'text-yellow-400' },
+                { id: 'stress', label: 'Estrés', icon: 'fa-brain', color: 'text-red-400' },
+                { id: 'soreness', label: 'Dolor Muscular', icon: 'fa-pills', color: 'text-orange-400' }
+            ];
+
+            return (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50" onClick={() => setShowWellnessModal(false)}>
+                    <div className="bg-slate-900 rounded-3xl p-6 max-w-sm w-full border border-slate-800 modal-overlay" onClick={e => e.stopPropagation()}>
+                        <h3 className="text-xl font-black uppercase italic mb-4 text-emerald-400">🧠 Bienestar Hoy</h3>
+                        <div className="space-y-6">
+                            {metrics.map(m => (
+                                <div key={m.id}>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <div className="flex items-center gap-2">
+                                            <i className={`fas ${m.icon} ${m.color} text-xs`}></i>
+                                            <span className="text-[10px] font-black uppercase text-slate-400">{m.label}</span>
+                                        </div>
+                                        <span className="text-xs font-black text-white">{formData[m.id]}/5</span>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        {[1, 2, 3, 4, 5].map(v => (
+                                            <button
+                                                key={v}
+                                                onClick={() => setFormData({ ...formData, [m.id]: v })}
+                                                className={`flex-1 h-8 rounded-lg transition-all ${formData[m.id] >= v ? 'bg-emerald-600 shadow-lg shadow-emerald-600/20' : 'bg-slate-950 border border-slate-800'}`}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                            <button
+                                onClick={() => {
+                                    const newWellness = { ...wellness, [today]: formData };
+                                    setWellness(newWellness);
+                                    saveData({ wellness: newWellness });
+                                    syncToSheets({ action: 'log_wellness', date: today, ...formData });
+                                    setShowWellnessModal(false);
+                                }}
+                                className="w-full bg-emerald-600 text-white p-4 rounded-xl font-black uppercase italic tracking-widest active:scale-95 transition-all"
+                            >
+                                Guardar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const DayModal = ({ setShowDayModal, selectedDay, getDayActivities, waterGoal }) => {
+            if (!selectedDay) return null;
+            const activities = getDayActivities(selectedDay);
+            const dateStr = selectedDay.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+
+            return (
+                <div className="fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50" onClick={() => setShowDayModal(false)}>
+                    <div className="bg-slate-900 rounded-3xl p-6 max-w-sm w-full border border-slate-800 modal-overlay" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-start mb-6">
+                            <div>
+                                <h3 className="text-lg font-black uppercase italic text-white line-clamp-1">{dateStr}</h3>
+                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Resumen del día</p>
+                            </div>
+                            <button onClick={() => setShowDayModal(false)} className="text-slate-500 hover:text-white">
+                                <i className="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+
+                        <div className="space-y-4 max-h-[60vh] overflow-y-auto no-scrollbar pr-1">
+                            {/* Agua */}
+                            <div className="bg-slate-950/50 p-4 rounded-2xl border border-slate-800">
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-xs font-black uppercase text-blue-400">Hidratación</span>
+                                    <span className="text-xs font-bold text-slate-400">{activities.water} / {waterGoal}ml</span>
+                                </div>
+                                <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden">
+                                    <div
+                                        className="bg-blue-500 h-full transition-all duration-1000"
+                                        style={{ width: `${Math.min(100, (activities.water / waterGoal) * 100)}%` }}
+                                    ></div>
+                                </div>
+                            </div>
+
+                            {/* Entrenamientos */}
+                            {activities.workouts.length > 0 && (
+                                <div className="space-y-2">
+                                    <p className="text-[10px] font-black uppercase text-slate-500 ml-1">Entrenamiento</p>
+                                    {activities.workouts.map((w, i) => (
+                                        <div key={i} className="bg-blue-900/10 p-3 rounded-xl border border-blue-900/30 flex justify-between items-center">
+                                            <span className="text-xs text-blue-100 font-bold">{w.exercise}</span>
+                                            <span className="text-[10px] text-blue-400 font-black">{w.weight}kg • {w.sets}x{w.reps}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Comidas */}
+                            {activities.meals.length > 0 && (
+                                <div className="space-y-2">
+                                    <p className="text-[10px] font-black uppercase text-slate-500 ml-1">Nutrición ({activities.nutrition.kcal} kcal)</p>
+                                    {activities.meals.map((m, i) => (
+                                        <div key={i} className="bg-purple-900/10 p-3 rounded-xl border border-purple-900/30">
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className="text-xs text-purple-100 font-bold">{m.food}</span>
+                                                <span className="text-[10px] text-purple-400 font-black">{m.kcal} kcal</span>
+                                            </div>
+                                            <p className="text-[9px] text-slate-500 italic">{m.grams}g • P:{m.protein}g C:{m.carbs}g G:{m.fat}g</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Running/Fútbol */}
+                            {(activities.running.length > 0 || activities.football.length > 0) && (
+                                <div className="space-y-2">
+                                    <p className="text-[10px] font-black uppercase text-slate-500 ml-1">Cardio & Deporte</p>
+                                    {activities.running.map((r, i) => (
+                                        <div key={i} className="bg-emerald-900/10 p-3 rounded-xl border border-emerald-900/30 flex justify-between">
+                                            <span className="text-xs text-emerald-100 font-bold">🏃 Running</span>
+                                            <span className="text-[10px] text-emerald-400 font-black">{r.km}km • {r.kcal}kcal</span>
+                                        </div>
+                                    ))}
+                                    {activities.football.map((f, i) => (
+                                        <div key={i} className="bg-emerald-900/10 p-3 rounded-xl border border-emerald-900/30 flex justify-between">
+                                            <span className="text-xs text-emerald-100 font-bold">⚽ Fútbol ({f.result})</span>
+                                            <span className="text-[10px] text-emerald-400 font-black">{f.goals}G {f.assists}A</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {activities.workouts.length === 0 && activities.meals.length === 0 && activities.running.length === 0 && activities.football.length === 0 && activities.water === 0 && (
+                                <div className="text-center py-8">
+                                    <i className="fas fa-bed text-slate-800 text-3xl mb-2"></i>
+                                    <p className="text-xs text-slate-600 font-bold">Nada registrado este día</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const NutritionView = ({
+            nutritionData, todayWater, waterGoal, latestMeasurement, wellness,
+            runningActivities, footballActivities, bodyGoals, setBodyGoals, saveData,
+            syncToSheets, addWater, measurements, meals, setShowMealModal,
+            setShowRunningModal, setShowFootballModal, setShowWellnessModal, setShowMeasurementModal
+        }) => {
+            const today = new Date().toDateString();
+            const todayWellness = wellness[today];
+
+            return (
+                <div className="max-w-md mx-auto min-h-screen pb-24 fade-in p-4 no-scrollbar overflow-y-auto">
+                    <h2 className="text-2xl font-black uppercase italic mb-6 border-l-4 border-purple-500 pl-3">Nutrición</h2>
+
+                    {/* MACROS DEL DÍA */}
+                    <div className="bg-gradient-to-br from-purple-900/20 to-purple-950/20 p-5 rounded-3xl border border-purple-800/50 mb-4">
+                        <div className="flex justify-between items-center mb-4">
+                            <div>
+                                <h3 className="text-sm font-black uppercase text-purple-400">Hoy</h3>
+                                <p className="text-[10px] text-slate-500 font-bold">Resumen de macros</p>
+                            </div>
+                            <div className="text-right">
+                                <span className="text-2xl font-black text-white italic">{nutritionData.kcal}</span>
+                                <span className="text-[10px] text-slate-500 font-black ml-1 uppercase underline decoration-purple-500">kcal</span>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-3">
+                            <div className="text-center p-2 bg-slate-950/40 rounded-xl">
+                                <p className="text-[8px] font-black text-slate-500 uppercase mb-1">Proteína</p>
+                                <p className="text-sm font-black text-purple-200">{nutritionData.protein}g</p>
+                            </div>
+                            <div className="text-center p-2 bg-slate-950/40 rounded-xl">
+                                <p className="text-[8px] font-black text-slate-500 uppercase mb-1">Carbs</p>
+                                <p className="text-sm font-black text-purple-200">{nutritionData.carbs}g</p>
+                            </div>
+                            <div className="text-center p-2 bg-slate-950/40 rounded-xl">
+                                <p className="text-[8px] font-black text-slate-500 uppercase mb-1">Grasa</p>
+                                <p className="text-sm font-black text-purple-200">{nutritionData.fat}g</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* HIDRATACIÓN */}
+                    <div className="bg-gradient-to-br from-blue-900/20 to-blue-950/20 p-5 rounded-3xl border border-blue-800/50 mb-4">
+                        <div className="flex justify-between items-center mb-3">
+                            <div>
+                                <h3 className="text-sm font-black uppercase text-blue-400">Hidratación</h3>
+                                <p className="text-[10px] text-slate-500 font-bold">Meta: {waterGoal}ml</p>
+                            </div>
+                            <span className="text-xl font-black text-blue-200">{todayWater}ml</span>
+                        </div>
+                        <div className="w-full bg-slate-950 h-3 rounded-full mb-4 overflow-hidden">
+                            <div
+                                className="bg-blue-500 h-full transition-all duration-1000 shadow-[0_0_10px_rgba(59,130,246,0.5)]"
+                                style={{ width: `${Math.min(100, (todayWater / waterGoal) * 100)}%` }}
+                            ></div>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={() => addWater(250)} className="flex-1 bg-blue-600/20 text-blue-400 py-2 rounded-xl text-xs font-black active:scale-95 transition-all border border-blue-800/50">+250ml</button>
+                            <button onClick={() => addWater(500)} className="flex-1 bg-blue-600 text-white py-2 rounded-xl text-xs font-black active:scale-95 transition-all shadow-lg shadow-blue-500/20">+500ml</button>
+                        </div>
+                    </div>
+
+                    {/* BIENESTAR & MEDICIÓN RÁPIDA */}
+                    <div className="grid grid-cols-2 gap-3 mb-6">
+                        <button
+                            onClick={() => setShowWellnessModal(true)}
+                            className={`p-4 rounded-3xl border transition-all active:scale-95 text-left ${todayWellness ? 'bg-emerald-900/20 border-emerald-800/50' : 'bg-slate-900 border-slate-800'}`}
+                        >
+                            <i className={`fas fa-brain mb-2 ${todayWellness ? 'text-emerald-400' : 'text-slate-600'}`}></i>
+                            <p className="text-[10px] font-black uppercase text-slate-500">Bienestar</p>
+                            <p className="text-xs font-bold text-white">{todayWellness ? 'Completado' : 'Pendiente'}</p>
+                        </button>
+                        <button
+                            onClick={() => setShowMeasurementModal(true)}
+                            className="p-4 rounded-3xl bg-slate-900 border border-slate-800 active:scale-95 text-left"
+                        >
+                            <i className="fas fa-weight text-blue-500 mb-2"></i>
+                            <p className="text-[10px] font-black uppercase text-slate-500">Peso</p>
+                            <p className="text-xs font-bold text-white">{latestMeasurement ? latestMeasurement.weight + 'kg' : 'Registrar'}</p>
+                        </button>
+                    </div>
+
+                    {/* BOTONES DE ACCIÓN RÁPIDA */}
+                    <div className="grid grid-cols-3 gap-2 mb-6">
+                        <button onClick={() => setShowMealModal(true)} className="flex flex-col items-center justify-center p-3 bg-purple-600 rounded-2xl text-white active:scale-95 transition-all shadow-lg shadow-purple-600/20">
+                            <i className="fas fa-plus mb-1 text-sm"></i>
+                            <span className="text-[8px] font-black uppercase">Comida</span>
+                        </button>
+                        <button onClick={() => setShowRunningModal(true)} className="flex flex-col items-center justify-center p-3 bg-emerald-600 rounded-2xl text-white active:scale-95 transition-all shadow-lg shadow-emerald-600/20">
+                            <i className="fas fa-running mb-1 text-sm"></i>
+                            <span className="text-[8px] font-black uppercase">Running</span>
+                        </button>
+                        <button onClick={() => setShowFootballModal(true)} className="flex flex-col items-center justify-center p-3 bg-blue-600 rounded-2xl text-white active:scale-95 transition-all shadow-lg shadow-blue-600/20">
+                            <i className="fas fa-futbol mb-1 text-sm"></i>
+                            <span className="text-[8px] font-black uppercase">Fútbol</span>
+                        </button>
+                    </div>
+
+                    {/* BODY GOALS - V4 */}
+                    <div className="bg-slate-900 rounded-3xl p-5 border border-slate-800 mb-4">
+                        <h3 className="text-xs font-black uppercase text-purple-400 mb-4 flex items-center gap-2">
+                            <i className="fas fa-target-cell"></i> Metas Físicas
+                        </h3>
+                        {Object.entries(bodyGoals).map(([key, value]) => (
+                            <div key={key} className="flex items-center justify-between mb-3 last:mb-0">
+                                <span className="text-[10px] text-slate-500 font-bold uppercase">
+                                    {key === 'weightGoal' ? 'Peso Meta' : key === 'fatPercentGoal' ? '% Grasa Meta' : '% Músculo Meta'}
+                                </span>
+                                <input
+                                    type="number"
+                                    step="0.1"
+                                    value={value || ''}
+                                    placeholder="0"
+                                    onChange={(e) => {
+                                        const newGoals = { ...bodyGoals, [key]: parseFloat(e.target.value) || 0 };
+                                        setBodyGoals(newGoals);
+                                        saveData({ bodyGoals: newGoals });
+                                    }}
+                                    className="w-20 bg-slate-950 border border-slate-800 p-1 px-2 rounded-lg text-white text-xs text-right outline-none focus:border-purple-500"
+                                />
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* ÚLTIMA COMIDA */}
+                    {meals.length > 0 && (
+                        <div className="bg-slate-900 rounded-3xl p-4 border border-slate-800">
+                            <p className="text-[10px] font-black text-slate-500 uppercase mb-3 ml-1 text-center">Últimos registros</p>
+                            <div className="space-y-3">
+                                {meals.slice(-3).reverse().map((m, i) => (
+                                    <div key={i} className="flex justify-between items-center bg-slate-950/50 p-3 rounded-2xl border border-slate-800/50">
+                                        <div>
+                                            <p className="text-xs font-black text-purple-200 uppercase">{m.food}</p>
+                                            <p className="text-[9px] text-slate-600 font-bold">{m.grams}g • P:{m.protein}g C:{m.carbs}g</p>
+                                        </div>
+                                        <p className="text-xs font-black text-purple-400 italic">{m.kcal} kcal</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const CalendarView = ({ calendarView, setCalendarView, waterGoal, getDayActivities, setSelectedDay, setShowDayModal }) => {
+            const daysInMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+            const firstDayOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+
+            const changeMonth = (offset) => {
+                setCalendarView(new Date(calendarView.getFullYear(), calendarView.getMonth() + offset, 1));
+            };
+
+            const days = Array.from({ length: daysInMonth(calendarView) }, (_, i) => i + 1);
+            const padding = Array.from({ length: (firstDayOfMonth(calendarView) + 6) % 7 }, (_, i) => i);
+            const labels = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+
+            const monthName = calendarView.toLocaleString('es-AR', { month: 'long', year: 'numeric' });
+
+            return (
+                <div className="max-w-md mx-auto min-h-screen pb-24 fade-in p-4">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-black uppercase italic border-l-4 border-yellow-500 pl-3">Calendario</h2>
+                        <div className="flex bg-slate-900 rounded-full p-1 border border-slate-800">
+                            <button onClick={() => changeMonth(-1)} className="p-2 px-3 hover:text-yellow-400"><i className="fas fa-chevron-left"></i></button>
+                            <span className="p-2 px-4 text-xs font-black uppercase italic min-w-[120px] text-center">{monthName}</span>
+                            <button onClick={() => changeMonth(1)} className="p-2 px-3 hover:text-yellow-400"><i className="fas fa-chevron-right"></i></button>
+                        </div>
+                    </div>
+
+                    <div className="bg-slate-900/50 rounded-3xl p-4 border border-slate-800">
+                        <div className="grid grid-cols-7 mb-4">
+                            {labels.map(l => <div key={l} className="text-center text-[10px] font-black text-slate-600 uppercase">{l}</div>)}
+                        </div>
+                        <div className="grid grid-cols-7 gap-1">
+                            {padding.map(p => <div key={`p-${p}`} />)}
+                            {days.map(d => {
+                                const date = new Date(calendarView.getFullYear(), calendarView.getMonth(), d);
+                                const isToday = date.toDateString() === new Date().toDateString();
+                                const activities = getDayActivities(date);
+
+                                const hasWorkout = activities.workouts.length > 0;
+                                const hasActivity = activities.running.length > 0 || activities.football.length > 0;
+                                const isHydrated = activities.water >= waterGoal;
+
+                                return (
+                                    <button
+                                        key={d}
+                                        onClick={() => { setSelectedDay(date); setShowDayModal(true); }}
+                                        className={`aspect-square rounded-xl p-1 flex flex-col items-center justify-between border transition-all active:scale-90 ${isToday ? 'border-yellow-500 bg-yellow-500/10' : 'border-slate-800 bg-slate-950/30'}`}
+                                    >
+                                        <span className={`text-[10px] font-black ${isToday ? 'text-yellow-500' : 'text-slate-400'}`}>{d}</span>
+                                        <div className="flex gap-0.5">
+                                            {hasWorkout && <div className="w-1 h-1 rounded-full bg-blue-500" />}
+                                            {hasActivity && <div className="w-1 h-1 rounded-full bg-emerald-500" />}
+                                            {isHydrated && <div className="w-1 h-1 rounded-full bg-blue-300" />}
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    <div className="mt-6 space-y-2">
+                        <div className="flex items-center gap-3 text-[10px] font-black uppercase text-slate-500 pl-2">
+                            <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500" /> Entreno</div>
+                            <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500" /> Cardio</div>
+                            <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-300" /> Hidratación</div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        };
+
+        // ==========================================
+        // COMPONENTE AI CHAT
+        // ==========================================
+        const AIChat = ({ onClose, contextData, userProfile }) => {
+            const [messages, setMessages] = useState([
+                { role: 'ai', text: `¡Hola ${userProfile.username}! Soy tu Coach IA. Veo que hoy consumiste ${contextData.nutrition.kcal} kcal. ¿En qué te puedo ayudar?` }
+            ]);
+            const [input, setInput] = useState('');
+            const [isThinking, setIsThinking] = useState(false);
+            const messagesEndRef = useRef(null);
+
+            const scrollToBottom = () => {
+                messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+            };
+
+            useEffect(scrollToBottom, [messages]);
+
+            const handleSend = async () => {
+                if (!input.trim()) return;
+                const userMsg = input;
+                setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
+                setInput('');
+                setIsThinking(true);
+
+                // SIMULACIÓN DE IA (Aquí conectaremos la API real luego)
+                setTimeout(() => {
+                    const lowerMsg = userMsg.toLowerCase();
+                    let aiResponse = "¡Entendido! Estoy analizando tus datos...";
+
+                    if (lowerMsg.includes('hambre') || lowerMsg.includes('comer')) {
+                        const proteinLeft = Math.max(0, 180 - contextData.nutrition.protein); // Meta ejemplo 180g
+                        aiResponse = `Si tienes hambre, te recomiendo priorizar la proteína. Te faltan unos ${proteinLeft}g hoy. ¿Qué tal una lata de atún o un batido de whey?`;
+                    } else if (lowerMsg.includes('fuerte') || lowerMsg.includes('entreno')) {
+                        aiResponse = "¡Esa es la actitud! Recuerda que para ganar fuerza, el descanso entre series pesadas (como las de hoy) es clave. Trata de dormir al menos 7 horas hoy.";
+                    } else if (lowerMsg.includes('grasa') || lowerMsg.includes('cardio')) {
+                         aiResponse = "El cardio es excelente para la salud cardiovascular y aumentar el gasto calórico. Si tu meta es bajar grasa, intenta mantener un déficit calórico ligero. Hoy llevas " + contextData.nutrition.kcal + " kcal.";
+                    } else {
+                        aiResponse = "Interesante pregunta. Basado en tu historial, vas por buen camino. Sigue así y no olvides registrar tu agua.";
+                    }
+
+                    setMessages(prev => [...prev, { role: 'ai', text: aiResponse }]);
+                    setIsThinking(false);
+                }, 1500);
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+                    <div 
+                        className="bg-slate-900 w-full sm:max-w-md h-[90vh] sm:h-[600px] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl border border-slate-700 chat-container overflow-hidden"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <div className="bg-slate-950 p-4 border-b border-slate-800 flex justify-between items-center">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg shadow-purple-500/20">
+                                    <i className="fas fa-robot text-white text-lg"></i>
+                                </div>
+                                <div>
+                                    <h3 className="font-black text-white text-sm">Coach IA</h3>
+                                    <p className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                        En línea
+                                    </p>
+                                </div>
+                            </div>
+                            <button onClick={onClose} className="w-8 h-8 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center hover:bg-slate-700 hover:text-white transition-colors">
+                                <i className="fas fa-times"></i>
+                            </button>
+                        </div>
+
+                        {/* Messages */}
+                        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-900 scroll-smooth">
+                            {messages.map((msg, idx) => (
+                                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                    <div 
+                                        className={`max-w-[80%] p-3 rounded-2xl text-sm font-medium leading-relaxed ${
+                                            msg.role === 'user' 
+                                                ? 'bg-blue-600 text-white rounded-br-none shadow-lg' 
+                                                : 'bg-slate-800 text-slate-200 rounded-bl-none border border-slate-700'
+                                        }`}
+                                    >
+                                        {msg.text}
+                                    </div>
+                                </div>
+                            ))}
+                            {isThinking && (
+                                <div className="flex justify-start">
+                                    <div className="bg-slate-800 p-3 rounded-2xl rounded-bl-none border border-slate-700 flex gap-1 items-center">
+                                        <div className="w-1.5 h-1.5 bg-slate-500 rounded-full typing-dot"></div>
+                                        <div className="w-1.5 h-1.5 bg-slate-500 rounded-full typing-dot"></div>
+                                        <div className="w-1.5 h-1.5 bg-slate-500 rounded-full typing-dot"></div>
+                                    </div>
+                                </div>
+                            )}
+                            <div ref={messagesEndRef} />
+                        </div>
+
+                        {/* Input */}
+                        <div className="p-3 bg-slate-950 border-t border-slate-800">
+                            <form 
+                                onSubmit={(e) => { e.preventDefault(); handleSend(); }}
+                                className="flex gap-2 relative"
+                            >
+                                <input
+                                    type="text"
+                                    value={input}
+                                    onChange={e => setInput(e.target.value)}
+                                    placeholder="Pregúntame algo..."
+                                    className="flex-1 bg-slate-900 border border-slate-700 text-white text-sm rounded-full px-4 py-3 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50 transition-all placeholder:text-slate-500"
+                                />
+                                <button 
+                                    type="submit"
+                                    disabled={!input.trim() || isThinking}
+                                    className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-purple-600 text-white flex items-center justify-center hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg shadow-purple-600/20"
+                                >
+                                    <i className="fas fa-paper-plane text-xs sm:text-sm"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const HistoryView = ({ workoutHistory }) => {
+            const groupedHistory = React.useMemo(() => {
+                const groups = {};
+                workoutHistory.forEach(entry => {
+                    const date = new Date(entry.date).toLocaleDateString('es-AR');
+                    if (!groups[date]) groups[date] = [];
+                    groups[date].push(entry);
+                });
+                return Object.entries(groups).reverse().slice(0, 10);
+            }, [workoutHistory]);
+
+            return (
+                <div className="max-w-md mx-auto min-h-screen pb-24 fade-in p-4">
+                    <h2 className="text-2xl font-black uppercase italic mb-6 border-l-4 border-emerald-500 pl-3">Historial</h2>
+                    {groupedHistory.length === 0 ? (
+                        <div className="text-center py-12">
+                            <i className="fas fa-clipboard-list text-slate-800 text-5xl mb-4"></i>
+                            <p className="text-slate-600 font-bold">No hay entrenamientos registrados</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {groupedHistory.map(([date, entries]) => (
+                                <div key={date} className="bg-slate-900 p-4 rounded-2xl border border-slate-800">
+                                    <p className="text-xs font-black text-emerald-400 mb-3 uppercase">{date}</p>
+                                    <div className="space-y-2">
+                                        {entries.map((entry, i) => (
+                                            <div key={i} className="flex justify-between items-center text-sm">
+                                                <span className="text-slate-400">{entry.exercise}</span>
+                                                <span className="text-slate-600 font-bold text-xs">Sem {entry.week} • {entry.day}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const SettingsView = ({
+            syncStatus, lastSync, SHEET_URL, coachingNotes, initialWeights,
+            setInitialWeights, saveData, targetTime, setTargetTime, waterGoal,
+            setWaterGoal, currentWeek, completedSets, setCompletedSets
+        }) => {
+            return (
+                <div className="max-w-md mx-auto min-h-screen pb-24 fade-in p-4">
+                    <h2 className="text-2xl font-black uppercase italic mb-6 border-l-4 border-blue-500 pl-3">Configuración</h2>
+
+                    <div className="space-y-6">
+                        {/* Google Sheets Sync */}
+                        <div className="bg-gradient-to-br from-emerald-900/20 to-emerald-950/20 p-5 rounded-2xl border border-emerald-800/50">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                    <i className="fas fa-table text-emerald-400 text-xl"></i>
+                                    <h3 className="text-sm font-black uppercase text-emerald-400">Google Sheets</h3>
+                                </div>
+                                {syncStatus === 'syncing' && <i className="fas fa-sync animate-spin text-blue-400"></i>}
+                                {syncStatus === 'success' && <i className="fas fa-check text-emerald-400"></i>}
+                                {syncStatus === 'error' && <i className="fas fa-exclamation-triangle text-red-400"></i>}
+                            </div>
+                            <p className="text-xs text-slate-400 mb-3 text-center">
+                                Sincronizado automáticamente
+                            </p>
+                            {lastSync && (
+                                <p className="text-[10px] text-slate-600 mb-3 text-center">
+                                    Última sync: {lastSync.toLocaleString('es-AR')}
+                                </p>
+                            )}
+
+                            <a
+                                href={SHEET_URL}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="w-full bg-emerald-600 text-white p-3 rounded-xl font-bold text-sm active:scale-95 transition-all flex items-center justify-center gap-2 mt-3"
+                            >
+                                <i className="fas fa-external-link-alt"></i>
+                                Abrir en Google Sheets
+                            </a>
+                        </div>
+
+                        {/* Notas del Coach - V4 */}
+                        <div className="bg-gradient-to-br from-pink-900/20 to-pink-950/20 p-5 rounded-2xl border border-pink-800/50">
+                            <h3 className="text-sm font-black uppercase text-pink-400 mb-4 flex items-center gap-2"><i className="fas fa-comment-dots"></i> Notas del Coach</h3>
+                            {coachingNotes.length === 0 ? (
+                                <p className="text-xs text-slate-500 mb-3">Todavía no hay notas del coach.</p>
+                            ) : (
+                                <div className="space-y-3">
+                                    {coachingNotes.slice(-3).reverse().map((note, i) => (
+                                        <div key={i} className="bg-slate-950/50 p-3 rounded-xl border border-pink-900/10">
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className="text-[8px] text-slate-500 font-bold uppercase">{new Date(note.date).toLocaleDateString('es-AR')}</span>
+                                                <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded ${note.type === 'Info' ? 'bg-blue-900/30 text-blue-400' : 'bg-pink-900/30 text-pink-400'}`}>{note.type}</span>
+                                            </div>
+                                            <p className="text-[11px] text-pink-100 font-medium">{note.note}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            <a href={SHEET_URL} target="_blank" className="text-[9px] text-pink-400 font-bold uppercase mt-4 block text-center hover:underline">Ver todas las notas en Sheets →</a>
+                        </div>
+
+                        {/* Pesos Iniciales */}
+                        <div className="bg-slate-900 p-5 rounded-3xl border border-slate-800">
+                            <h3 className="text-sm font-black uppercase text-blue-400 mb-4">Pesos Base (kg)</h3>
+                            <div className="space-y-3">
+                                {Object.entries(initialWeights).map(([key, value]) => (
+                                    <div key={key}>
+                                        <label className="text-[10px] text-slate-500 font-black block mb-1 uppercase pl-1">{key}</label>
+                                        <input
+                                            type="number"
+                                            value={value}
+                                            onChange={(e) => {
+                                                const newWeights = { ...initialWeights, [key]: parseInt(e.target.value) || 0 };
+                                                setInitialWeights(newWeights);
+                                                saveData({ initialWeights: newWeights });
+                                            }}
+                                            className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-white outline-none focus:border-blue-500"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Configuración Timer & Agua */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="bg-slate-900 p-4 rounded-3xl border border-slate-800">
+                                <label className="text-[10px] text-slate-500 font-black block mb-2 uppercase">Descanso (s)</label>
+                                <select
+                                    value={targetTime}
+                                    onChange={e => {
+                                        const t = parseInt(e.target.value);
+                                        setTargetTime(t);
+                                        saveData({ targetTime: t });
+                                    }}
+                                    className="w-full bg-slate-950 border border-slate-800 p-2 rounded-xl text-white text-xs outline-none focus:border-blue-500"
+                                >
+                                    {[60, 90, 120, 150, 180, 210, 240, 300].map(s => <option key={s} value={s}>{s}s</option>)}
+                                </select>
+                            </div>
+                            <div className="bg-slate-900 p-4 rounded-3xl border border-slate-800">
+                                <label className="text-[10px] text-slate-500 font-black block mb-2 uppercase">Meta Agua (ml)</label>
+                                <input
+                                    type="number"
+                                    step="100"
+                                    value={waterGoal}
+                                    onChange={e => {
+                                        const g = parseInt(e.target.value) || 3000;
+                                        setWaterGoal(g);
+                                        saveData({ waterGoal: g });
+                                    }}
+                                    className="w-full bg-slate-950 border border-slate-800 p-2 rounded-xl text-white text-xs outline-none focus:border-blue-500"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Peligro */}
+                        <div className="pt-6 space-y-3">
+                            <button
+                                onClick={() => {
+                                    if (confirm(`¿Seguro que querés reiniciar la semana ${currentWeek}? Se borrarán las series completadas de esta semana.`)) {
+                                        const newSets = {};
+                                        Object.keys(completedSets).forEach(key => {
+                                            if (!key.startsWith(`${currentWeek}-`)) newSets[key] = completedSets[key];
+                                        });
+                                        setCompletedSets(newSets);
+                                        saveData({ completedSets: newSets });
+                                    }
+                                }}
+                                className="w-full bg-orange-900/10 border border-orange-900/50 text-orange-500 p-4 rounded-2xl font-black uppercase text-[10px] active:scale-95 transition-all"
+                            >
+                                Reiniciar Progreso Sem {currentWeek}
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (confirm('¿Seguro que querés cerrar sesión?')) {
+                                        localStorage.removeItem('pablo_session');
+                                        window.location.reload();
+                                    }
+                                }}
+                                className="w-full bg-red-900/10 border border-red-900/50 text-red-500 p-4 rounded-2xl font-black uppercase text-[10px] active:scale-95 transition-all"
+                            >
+                                Cerrar Sesión
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const WorkoutView = ({
+            currentWeek, setCurrentWeek, syncStatus, stats, isTimerActive, timer,
+            startTimer, stopTimer, routine, completedSets, toggleSet
+        }) => (
+            <div className="max-w-md mx-auto min-h-screen pb-24 fade-in">
+                <header className="sticky top-0 z-50 bg-slate-950/95 backdrop-blur-md p-4 flex justify-between items-center border-b border-slate-800">
+                    <i className="fas fa-dumbbell text-blue-500 text-xl"></i>
+                    <div className="flex items-center gap-3 bg-slate-900 rounded-full px-4 py-2 border border-slate-700">
+                        <button onClick={() => setCurrentWeek(Math.max(1, currentWeek - 1))} className="active:scale-90 transition-transform">
+                            <i className="fas fa-chevron-left text-xs text-slate-400 p-1"></i>
+                        </button>
+                        <span className="font-black text-sm uppercase italic w-16 text-center">Sem {currentWeek}</span>
+                        <button onClick={() => setCurrentWeek(Math.min(24, currentWeek + 1))} className="active:scale-90 transition-transform">
+                            <i className="fas fa-chevron-right text-xs text-slate-400 p-1"></i>
+                        </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        {syncStatus === 'syncing' && <i className="fas fa-sync animate-spin text-blue-400 text-sm"></i>}
+                        {syncStatus === 'success' && <i className="fas fa-cloud-upload-alt text-emerald-400 text-sm"></i>}
+                        {syncStatus === 'error' && <i className="fas fa-exclamation-circle text-red-400 text-sm"></i>}
+                        {syncStatus === 'idle' && <i className="fas fa-save text-emerald-600 text-sm"></i>}
+                    </div>
+                </header>
+
+                <main className="p-4 space-y-6">
+                    {/* STATS RÁPIDAS */}
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-gradient-to-br from-slate-900 to-slate-950 p-4 rounded-2xl border border-slate-800 shadow-xl">
+                            <p className="text-[10px] uppercase font-black text-slate-500 mb-1">Carga Actual</p>
+                            <p className="text-2xl font-black text-emerald-400 italic">{stats.sets}x{stats.reps}</p>
+                            <p className="text-[9px] text-slate-600 font-bold mt-1">
+                                {stats.increment > 0 ? `+${stats.increment}kg base` : 'Peso base'}
+                            </p>
+                            <p className="text-[8px] text-blue-500 font-bold mt-1">
+                                {((currentWeek - 1) % 4) === 3 ? '¡Próxima sem +2.5kg!' : `Sem ${((currentWeek - 1) % 4) + 1} de 4`}
+                            </p>
+                        </div>
+                        <div className={`bg-gradient-to-br from-slate-900 to-slate-950 p-4 rounded-2xl border transition-all duration-300 shadow-xl ${isTimerActive ? 'border-blue-500 shadow-blue-600/20' : 'border-slate-800'}`}>
+                            <p className="text-[10px] uppercase font-black text-blue-400 mb-1">Descanso</p>
+                            <p className="text-2xl font-black italic text-white">
+                                {timer > 0 ? `${Math.floor(timer / 60)}:${(timer % 60).toString().padStart(2, '0')}` : "0:00"}
+                            </p>
+                            <div className="flex gap-1 mt-2">
+                                <button onClick={startTimer} className="flex-1 bg-blue-600/20 text-blue-400 text-[9px] font-bold py-1 rounded active:scale-95 transition-all">INICIAR</button>
+                                <button onClick={stopTimer} className="flex-1 bg-slate-950 text-slate-600 text-[9px] font-bold py-1 rounded active:scale-95 transition-all">PARAR</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {routine.map(day => (
+                        <section key={day.id} className="space-y-4">
+                            <h2 className="text-xl font-black uppercase italic border-l-4 border-blue-500 pl-3">{day.title}</h2>
+                            {day.ex.map((e, i) => (
+                                <div key={i} className="bg-gradient-to-br from-slate-900 to-slate-950 p-5 rounded-3xl border border-slate-800 space-y-4 shadow-xl">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <h3 className="font-black text-lg uppercase italic text-white leading-none">{e.name}</h3>
+                                            <p className="text-[10px] font-bold text-blue-400 mt-2 uppercase tracking-widest">
+                                                Peso: {typeof e.w === 'number' ? e.w + 'kg' : e.w} • {e.s}x{e.r}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Series Calentamiento */}
+                                    {e.wu && (
+                                        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                                            {[0.5, 0.7, 0.9].map((pct, wi) => {
+                                                const key = `${currentWeek}-${day.id}-${e.name}-warmup-${wi}`;
+                                                const done = completedSets[key];
+                                                const warmupWeight = Math.round(e.w * pct);
+                                                return (
+                                                    <button
+                                                        key={wi}
+                                                        onClick={() => toggleSet(day.id, e.name, wi, true, warmupWeight, e.s, e.r)}
+                                                        className={`shrink-0 px-4 py-2 rounded-full text-[10px] font-black border transition-all active:scale-90 ${done ? 'bg-orange-500 border-orange-400 text-white shadow-lg' : 'bg-slate-950 border-slate-700 text-slate-500'}`}
+                                                    >
+                                                        {warmupWeight}kg
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+
+                                    {/* Series de Trabajo */}
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {Array.from({ length: e.s }).map((_, si) => {
+                                            const key = `${currentWeek}-${day.id}-${e.name}-work-${si}`;
+                                            const done = completedSets[key];
+                                            return (
+                                                <button
+                                                    key={si}
+                                                    onClick={() => toggleSet(day.id, e.name, si, false, e.w, e.s, e.r)}
+                                                    className={`aspect-square rounded-2xl flex items-center justify-center font-black text-xl border-2 transition-all active:scale-90 ${done ? 'bg-emerald-600 border-emerald-400 text-white shadow-lg shadow-emerald-500/30' : 'bg-slate-950 border-slate-700 text-slate-600'}`}
+                                                >
+                                                    {done ? <i className="fas fa-check"></i> : si + 1}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ))}
+                        </section>
+                    ))}
+                </main>
+            </div>
+        );
+        root.render(<App />);
+
+        // Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                const swCode = `
+                    const CACHE_NAME = 'entreno-pablo-v3';
+                    const urlsToCache = ['/'];
+                    
+                    self.addEventListener('install', event => {
+                        event.waitUntil(
+                            caches.open(CACHE_NAME)
+                                .then(cache => cache.addAll(urlsToCache))
+                        );
+                    });
+                    
+                    self.addEventListener('fetch', event => {
+                        event.respondWith(
+                            caches.match(event.request)
+                                .then(response => response || fetch(event.request))
+                        );
+                    });
+                `;
+
+                const blob = new Blob([swCode], { type: 'application/javascript' });
+                const swUrl = URL.createObjectURL(blob);
+
+                navigator.serviceWorker.register(swUrl)
+                    .then(() => console.log('SW OK'))
+                    .catch(err => console.log('SW Error:', err));
+            });
+        }
+    </script>
+</body>
+
+</html>
