@@ -1698,7 +1698,7 @@
 
                 const apiKey = localStorage.getItem('gemini_api_key');
                 if (!apiKey) {
-                    setMessages(prev => [...prev, { role: 'ai', text: "⚠️ Para que pueda pensar de verdad, necesito una API Key de Google Gemini. Toca el engranaje ⚙️ arriba a la derecha para configurarla (es gratis)." }]);
+                    setMessages(prev => [...prev, { role: 'ai', text: "⚠️ Necesito un cerebro. Configura tu API Key de **Groq** (es gratis y muy potente) en el engranaje ⚙️." }]);
                     setIsThinking(false);
                     return;
                 }
@@ -1708,7 +1708,7 @@
 ERES UN ENTRENADOR PERSONAL EXPERTO Y MOTIVADOR LLAMADO "COACH IA".
 TU OBJETIVO: Ayudar a ${userProfile.username} a alcanzar sus metas físicas (${contextData.goals.weightGoal}kg, bajar grasa).
 
-CONTEXTO ACTUAL DEL USUARIO (JSON):
+CONTEXTO ACTUAL DEL USUARIO:
 ${JSON.stringify(contextData, null, 2)}
 
 INSTRUCCIONES:
@@ -1720,13 +1720,20 @@ INSTRUCCIONES:
 6. Habla en español rioplatense (Argentina) pero profesional.
 `;
 
-                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+                    // Usamos Groq (Llama 3) que es compatible con formato OpenAI
+                    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${apiKey}`
+                        },
                         body: JSON.stringify({
-                            contents: [{
-                                parts: [{ text: `${systemPrompt}\n\nPREGUNTA DEL USUARIO: ${userMsg}` }]
-                            }]
+                            model: "llama3-70b-8192", // Modelo gratuito muy potente (nivel GPT-4/Claude)
+                            messages: [
+                                { role: "system", content: systemPrompt },
+                                { role: "user", content: userMsg }
+                            ],
+                            temperature: 0.7
                         })
                     });
 
@@ -1734,12 +1741,12 @@ INSTRUCCIONES:
 
                     if (data.error) throw new Error(data.error.message);
 
-                    const aiResponse = data.candidates[0].content.parts[0].text;
+                    const aiResponse = data.choices[0].message.content;
                     setMessages(prev => [...prev, { role: 'ai', text: aiResponse }]);
 
                 } catch (error) {
-                    console.error("Error Gemini:", error);
-                    setMessages(prev => [...prev, { role: 'ai', text: `❌ Error al conectar con mi cerebro: ${error.message}. Verifica tu API Key.` }]);
+                    console.error("Error AI:", error);
+                    setMessages(prev => [...prev, { role: 'ai', text: `❌ Error de conexión: ${error.message}. Verifica tu API Key de Groq.` }]);
                 } finally {
                     setIsThinking(false);
                 }
@@ -1765,7 +1772,7 @@ INSTRUCCIONES:
                                     <i className="fas fa-robot text-white text-lg"></i>
                                 </div>
                                 <div onDoubleClick={toggleDebug} className="cursor-help" title="Doble click para ver contexto">
-                                    <h3 className="font-black text-white text-sm">Coach IA <span className="text-[9px] text-slate-500 font-normal opacity-50">(Gemini)</span></h3>
+                                    <h3 className="font-black text-white text-sm">Coach IA <span className="text-[9px] text-slate-500 font-normal opacity-50">(Groq/Llama3)</span></h3>
                                     <p className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
                                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                                         En línea
@@ -1775,10 +1782,10 @@ INSTRUCCIONES:
                             <div className="flex gap-2">
                                 <button
                                     onClick={() => {
-                                        const key = prompt("Ingresa tu Google Gemini API Key (La guardaré en tu dispositivo):", localStorage.getItem('gemini_api_key') || '');
+                                        const key = prompt("Ingresa tu API Key de Groq (Empieza con 'gsk_'):", localStorage.getItem('ai_api_key') || '');
                                         if (key !== null) {
-                                            localStorage.setItem('gemini_api_key', key.trim());
-                                            alert("¡API Key guardada! Ahora soy más inteligente.");
+                                            localStorage.setItem('ai_api_key', key.trim());
+                                            alert("¡API Key de Groq guardada!");
                                         }
                                     }}
                                     className="w-8 h-8 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center hover:bg-slate-700 hover:text-white transition-colors"
