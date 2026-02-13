@@ -285,6 +285,7 @@
                 goal: '',
                 targetDate: '',
                 targetPace: '',
+                type: 'calle', // 'calle' o 'montaña'
                 sessions: []
             });
             const [contextSummary, setContextSummary] = useState(() => localStorage.getItem('ai_context_summary') || '');
@@ -900,6 +901,8 @@
                             activeProvider={activeProvider}
                             AI_PROVIDERS={AI_PROVIDERS}
                             userProfile={loginForm}
+                            workoutHistory={workoutHistory}
+                            runningActivities={runningActivities}
                         />
                     )}
                     {currentView === 'settings' && (
@@ -1921,13 +1924,13 @@
         // ==========================================
         // COMPONENTE PLAN RUNNING
         // ==========================================
-        const RunningPlanView = ({ runningPlan, setRunningPlan, saveData, activeProvider, AI_PROVIDERS, userProfile }) => {
+        const RunningPlanView = ({ runningPlan, setRunningPlan, saveData, activeProvider, AI_PROVIDERS, userProfile, workoutHistory, runningActivities }) => {
             const [isGenerating, setIsGenerating] = useState(false);
             const provider = AI_PROVIDERS[activeProvider];
 
             const generatePlan = async () => {
                 if (!runningPlan.goal || !runningPlan.targetDate || !runningPlan.targetPace) {
-                    alert("Por favor completá objetivo, fecha y ritmo.");
+                    alert("Por favor completá objetivo, fecha, ritmo y tipo de preparación.");
                     return;
                 }
                 setIsGenerating(true);
@@ -1939,11 +1942,29 @@
                     return;
                 }
 
-                // PROMPT EXPERTO: Few-shot + Cero tokens extra
-                const promptText = `Coach de Running Elite. Usuario: ${userProfile.username}. Distancia: ${runningPlan.goal}. Fecha: ${runningPlan.targetDate}. Ritmo: ${runningPlan.targetPace} min/km.
-Generá un plan de 4-8 semanas (3-4 entrenos/semana). Variá: Pasadas (más rápido que ritmo objetivo), Fondos (más lento), Tempo (ritmo objetivo).
-Devolve SOLO un array JSON. 
-EJEMPLO: [{"date": "2024-03-01", "description": "8km suaves a 5:45 min/km"}, {"date": "2024-03-03", "description": "Pasadas 5x1000m a 4:40 min/km"}]`;
+                // RECOPILAR HISTORIAL PARA COMPATIBILIDAD
+                const lastWorkouts = workoutHistory.slice(-10).reverse();
+                const lastRuns = runningActivities.slice(-5).reverse();
+                const historyCtx = `
+Historial Reciente (para compatibilidad):
+- Fuerza: ${lastWorkouts.map(w => w.exercise).join(', ')}
+- Running: ${lastRuns.map(r => `${r.distance}km a ${r.pace}`).join(', ')}
+`;
+
+                const today = new Date().toLocaleDateString('es-AR');
+                const promptText = `Coach de Running Elite. Usuario: ${userProfile.username}. 
+OBJETIVO: ${runningPlan.goal} (${runningPlan.type === 'calle' ? 'Preparación Calle/Ruta' : 'Preparación Montaña/Trail'})
+FECHA META: ${runningPlan.targetDate}. RITMO META: ${runningPlan.targetPace} min/km.
+SITUACIÓN ACTUAL: ${historyCtx}
+
+INSTRUCCIONES PROFESIONALES:
+1. Período: Desde HOY (${today}) hasta ${runningPlan.targetDate}.
+2. FASES CIENTÍFICAS: Incluí explícitamente fases de Base, Construcción, Pico y Tapering.
+3. ESPECIFIDAD: ${runningPlan.type === 'calle' ? 'Enfoque en economía de carrera, ritmos constantes y cadencia.' : 'Enfoque en fuerza específica, cuestas, desnivel acumulado y propiocepción.'}
+4. COMPATIBILIDAD: Adaptá el inicio del plan al historial reciente del usuario para evitar sobreentrenamiento.
+
+Devolvé SOLO un array JSON plano.
+ESTRUCTURA: [{"date": "YYYY-MM-DD", "phase": "Base", "description": "Detalle técnico"}]`;
 
                 try {
                     const response = await fetch(provider.url, {
@@ -1956,7 +1977,7 @@ EJEMPLO: [{"date": "2024-03-01", "description": "8km suaves a 5:45 min/km"}, {"d
                             model: provider.model,
                             messages: [{ role: "user", content: promptText }],
                             temperature: 0.7,
-                            max_tokens: 1500
+                            max_tokens: 2000
                         })
                     });
                     const data = await response.json();
@@ -1969,10 +1990,10 @@ EJEMPLO: [{"date": "2024-03-01", "description": "8km suaves a 5:45 min/km"}, {"d
                     const newPlan = { ...runningPlan, sessions: sessions.map(s => ({ ...s, completed: false })) };
                     setRunningPlan(newPlan);
                     saveData({ runningPlan: newPlan });
-                    alert("¡Plan generado con éxito!");
+                    alert("¡Plan científico generado con éxito!");
                 } catch (e) {
                     console.error(e);
-                    alert("Error. Verificá tu API Key o conexión.");
+                    alert("Error en la generación. Verificá tu API Key o conexión.");
                 } finally {
                     setIsGenerating(false);
                 }
@@ -1997,6 +2018,21 @@ EJEMPLO: [{"date": "2024-03-01", "description": "8km suaves a 5:45 min/km"}, {"d
                     <div className="bg-slate-900 rounded-3xl p-5 border border-slate-800 mb-6 shadow-xl shadow-pink-500/5">
                         <div className="space-y-4">
                             <div>
+                                <label className="text-[10px] text-slate-500 font-black block mb-2 uppercase tracking-widest pl-1 text-center">Tipo de Preparación</label>
+                                <div className="grid grid-cols-2 gap-2 mb-4">
+                                    <button 
+                                        onClick={() => setRunningPlan({...runningPlan, type: 'calle'})}
+                                        className={`p-3 rounded-xl font-bold text-[10px] uppercase transition-all flex items-center justify-center gap-2 border ${runningPlan.type === 'calle' ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-slate-950 border-slate-800 text-slate-500'}`}
+                                    >
+                                        <i className="fas fa-road"></i> Calle
+                                    </button>
+                                    <button 
+                                        onClick={() => setRunningPlan({...runningPlan, type: 'montaña'})}
+                                        className={`p-3 rounded-xl font-bold text-[10px] uppercase transition-all flex items-center justify-center gap-2 border ${runningPlan.type === 'montaña' ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-slate-950 border-slate-800 text-slate-500'}`}
+                                    >
+                                        <i className="fas fa-mountain"></i> Montaña
+                                    </button>
+                                </div>
                                 <label className="text-[10px] text-slate-500 font-black block mb-1 uppercase tracking-widest pl-1">Objetivo del Plan</label>
                                 <input
                                     type="text"
@@ -2052,8 +2088,14 @@ EJEMPLO: [{"date": "2024-03-01", "description": "8km suaves a 5:45 min/km"}, {"d
                                     <div
                                         key={idx}
                                         onClick={() => toggleSession(originalIdx)}
-                                        className={`p-4 rounded-2xl border transition-all cursor-pointer select-none active:scale-[0.98] ${session.completed ? 'bg-emerald-900/10 border-emerald-800/30 opacity-60' : 'bg-slate-900 border-slate-800 hover:border-pink-500/30'}`}
+                                        className={`p-4 rounded-2xl border transition-all cursor-pointer select-none active:scale-[0.98] relative overflow-hidden ${session.completed ? 'bg-emerald-900/10 border-emerald-800/30 opacity-60' : 'bg-slate-900 border-slate-800 hover:border-pink-500/30'}`}
                                     >
+                                        {/* Phase Badge */}
+                                        {session.phase && (
+                                            <div className="absolute top-0 right-0 px-2 py-0.5 bg-purple-900/30 text-purple-400 text-[7px] font-black uppercase rounded-bl-lg border-l border-b border-purple-900/20">
+                                                {session.phase}
+                                            </div>
+                                        )}
                                         <div className="flex items-start gap-4">
                                             <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all ${session.completed ? 'bg-emerald-500 border-emerald-500 shadow-lg shadow-emerald-500/20' : 'border-slate-700'}`}>
                                                 {session.completed && <i className="fas fa-check text-white text-[10px]"></i>}
