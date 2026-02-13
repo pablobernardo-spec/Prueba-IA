@@ -288,6 +288,7 @@
                 sessions: []
             });
             const [contextSummary, setContextSummary] = useState(() => localStorage.getItem('ai_context_summary') || '');
+            const [copySuccess, setCopySuccess] = useState(false); // Feedback visual
             const [showRunningPlanModal, setShowRunningPlanModal] = useState(false);
 
             const timerIntervalRef = useRef(null);
@@ -689,6 +690,70 @@
             }, [workoutHistory, runningActivities, footballActivities, meals, waterIntake, wellness]);
 
 
+            // EXPORTAR CONTEXTO PARA IA - FULL HISTORY
+            const exportDataForAI = useCallback(() => {
+                const nutrition = getDailyNutrition();
+                const latestM = getLatestMeasurement();
+
+                let text = `--- CONTEXTO COMPLETO PABLO (${new Date().toLocaleDateString('es-AR')}) ---\n\n`;
+                text += `PERFIL IA: ${contextSummary || "Sin resumen previo"}\n`;
+                text += `METAS: Peso ${bodyGoals.weightGoal}kg, Grasa ${bodyGoals.fatPercentGoal}%, Músculo ${bodyGoals.musclePercentGoal}%\n`;
+                
+                text += `\nHISTORIAL DE MEDICIONES:\n`;
+                if (measurements.length > 0) {
+                    measurements.forEach(m => text += `- ${new Date(m.date).toLocaleDateString('es-AR')}: ${m.weight}kg, ${m.fatPercent}% grasa, ${m.musclePercent}% musc\n`);
+                } else {
+                    text += `- Sin datos.\n`;
+                }
+
+                text += `\nESTADO HOY (${new Date().toLocaleDateString('es-AR')}):\n`;
+                text += `- Calorías: ${nutrition.kcal} kcal (P:${nutrition.protein}g, C:${nutrition.carbs}g, G:${nutrition.fat}g)\n- Agua: ${getTodayWater()}ml / ${waterGoal}ml\n`;
+
+                text += `\nHISTORIAL DE COMIDAS:\n`;
+                if (meals.length > 0) {
+                    meals.forEach(m => text += `- ${new Date(m.date).toLocaleDateString('es-AR')} ${m.food}: ${m.kcal}kcal (P:${m.protein}g)\n`);
+                } else {
+                    text += `- Sin datos.\n`;
+                }
+
+                text += `\nHISTORIAL DE ENTRENAMIENTOS:\n`;
+                if (workoutHistory.length > 0) {
+                    workoutHistory.forEach(w => text += `- ${new Date(w.date).toLocaleDateString('es-AR')}: ${w.exercise} (${w.sets}x${w.reps} @ ${w.weight}kg)\n`);
+                } else {
+                    text += `- Sin datos.\n`;
+                }
+
+                text += `\nHISTORIAL RUNNING:\n`;
+                if (runningActivities.length > 0) {
+                    runningActivities.forEach(r => text += `- ${new Date(r.date).toLocaleDateString('es-AR')}: ${r.distance}km en ${r.duration}min (${r.pace} min/km)\n`);
+                } else {
+                    text += `- Sin datos.\n`;
+                }
+
+                text += `\nHISTORIAL FÚTBOL:\n`;
+                if (footballActivities.length > 0) {
+                    footballActivities.forEach(f => text += `- ${new Date(f.date).toLocaleDateString('es-AR')}: ${f.duration}min, MVP: ${f.mvp ? 'Sí' : 'No'}\n`);
+                } else {
+                    text += `- Sin datos.\n`;
+                }
+
+                if (runningPlan.sessions.length > 0) {
+                    text += `\nPLAN RUNNING ACTUAL: ${runningPlan.goal}\n`;
+                    text += `Meta: ${runningPlan.targetDate}, Ritmo: ${runningPlan.targetPace}\n`;
+                    runningPlan.sessions.forEach(s => text += `- ${s.date}: ${s.description}\n`);
+                }
+
+                text += `\n--- FIN DEL CONTEXTO ---`;
+
+                navigator.clipboard.writeText(text).then(() => {
+                    setCopySuccess(true);
+                    setTimeout(() => setCopySuccess(false), 2000);
+                }).catch(err => {
+                    console.error('Error al copiar:', err);
+                    alert("No se pudo copiar el texto. Revisá los permisos del navegador.");
+                });
+            }, [contextSummary, bodyGoals, measurements, meals, workoutHistory, runningActivities, footballActivities, runningPlan, waterGoal, getDailyNutrition, getLatestMeasurement, getTodayWater]);
+
             if (loading) {
                 return (
                     <div id="loader">
@@ -853,6 +918,10 @@
                             currentWeek={currentWeek}
                             completedSets={completedSets}
                             setCompletedSets={setCompletedSets}
+                            exportDataForAI={exportDataForAI}
+                            copySuccess={copySuccess}
+                            contextSummary={contextSummary}
+                            setContextSummary={setContextSummary}
                         />
                     )}
 
@@ -2326,7 +2395,8 @@ IMPORTANT: Si detectás cambios en metas o lesiones, iniciá tu respuesta con [N
         const SettingsView = ({
             syncStatus, lastSync, SHEET_URL, coachingNotes, initialWeights,
             setInitialWeights, saveData, targetTime, setTargetTime, waterGoal,
-            setWaterGoal, currentWeek, completedSets, setCompletedSets
+            setWaterGoal, currentWeek, completedSets, setCompletedSets, 
+            exportDataForAI, copySuccess, contextSummary, setContextSummary
         }) => {
             return (
                 <div className="max-w-md mx-auto min-h-screen pb-24 fade-in p-4">
@@ -2383,6 +2453,42 @@ IMPORTANT: Si detectás cambios en metas o lesiones, iniciá tu respuesta con [N
                                 </div>
                             )}
                             <a href={SHEET_URL} target="_blank" className="text-[9px] text-pink-400 font-bold uppercase mt-4 block text-center hover:underline">Ver todas las notas en Sheets →</a>
+                        </div>
+
+                        {/* Portabilidad IA - NUEVO */}
+                        <div className="bg-gradient-to-br from-indigo-900/20 to-purple-900/20 p-5 rounded-2xl border border-indigo-800/50">
+                            <h3 className="text-sm font-black uppercase text-indigo-400 mb-2 flex items-center gap-2">
+                                <i className="fas fa-microchip"></i> Portabilidad IA
+                            </h3>
+                            <p className="text-[10px] text-slate-400 mb-4 leading-relaxed">
+                                Copiá tu historial completo en formato Markdown para usarlo en otras IAs.
+                            </p>
+                            <button
+                                onClick={exportDataForAI}
+                                className={`w-full ${copySuccess ? 'bg-emerald-600' : 'bg-gradient-to-r from-indigo-600 to-purple-600'} text-white p-3 rounded-xl font-bold text-sm active:scale-95 transition-all flex items-center justify-center gap-2`}
+                            >
+                                <i className={`fas ${copySuccess ? 'fa-check' : 'fa-copy'}`}></i>
+                                {copySuccess ? '¡Copiado!' : 'Copiar Historial Completo'}
+                            </button>
+                        </div>
+
+                        {/* Perfil Smart (AI Summary) - NUEVO */}
+                        <div className="bg-slate-900 p-5 rounded-3xl border border-slate-800">
+                            <h3 className="text-sm font-black uppercase text-purple-400 mb-2 flex items-center gap-2">
+                                <i className="fas fa-brain"></i> Perfil Smart (IA)
+                            </h3>
+                            <p className="text-[10px] text-slate-500 mb-3 leading-relaxed">
+                                Este es el resumen que el Coach IA tiene de vos. Podés editarlo si querés ajustar tu foco.
+                            </p>
+                            <textarea
+                                value={contextSummary}
+                                onChange={(e) => {
+                                    setContextSummary(e.target.value);
+                                    localStorage.setItem('ai_context_summary', e.target.value);
+                                }}
+                                className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-white outline-none focus:border-purple-500 text-xs min-h-[100px] resize-none"
+                                placeholder="Ej: Atleta enfocado en pérdida de grasa y 10k..."
+                            />
                         </div>
 
                         {/* Pesos Iniciales */}
